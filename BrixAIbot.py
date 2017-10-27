@@ -2,10 +2,14 @@
 
 from telegram.ext import Updater
 from telegram.ext import CommandHandler as CmdHndl
+from telegram.ext import MessageHandler as MsgHndl
+from telegram.ext import Filters
 from telegram.error import (TelegramError, Unauthorized, BadRequest, TimedOut,
 		ChatMigrated, NetworkError)
 import logging
 import configparser as CfgPsr
+
+from datetime import datetime
 
 config_filename = '/etc/telegram-send.conf'
 chat_id = ""
@@ -35,7 +39,21 @@ def start (bot, update):
 	global chat_id, act_bot
 	chat_id = update.message.chat_id
 	act_bot     = bot
-	send_me ("I'm BAI - Brix A.I")
+	h = datetime.now().time().hour
+	if h >= 5 and h <= 12:
+		greeting = "Good morning."
+	elif h > 12 and h <= 17:
+		greeting = "Good afternoon."
+	elif h > 17 and h <= 21:
+		greeting = "Good evening."
+	else:
+		greeting = "Greetings night owl."
+
+	send_me (greeting + " " + "My name is BAI - Brix A.I.")
+
+def process_msg (bot, update):
+	msg = update.message.text
+	send_me ("You said " + msg)
 
 def main ():
 	config = CfgPsr.ConfigParser ()
@@ -46,8 +64,12 @@ def main ():
 	dispatcher.add_error_handler (error_cb)
 	logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 	
+	# Adding handlers
 	start_hndl = CmdHndl ('start', start)
+	msg_hndl   = MsgHndl (Filters.text, process_msg)
+
 	dispatcher.add_handler (start_hndl)
+	dispatcher.add_handler (msg_hndl)
 	
 	updater.start_polling()
 	updater.idle()
