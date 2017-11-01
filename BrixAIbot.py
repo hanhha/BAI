@@ -11,6 +11,8 @@ import configparser as CfgPsr
 
 from datetime import datetime
 
+from BrixAIUtils import VehicleCheck 
+
 config_filename = '/etc/telegram-send.conf'
 chat_id = ""
 act_bot = None
@@ -51,6 +53,19 @@ def start (bot, update):
 
 	send_me (greeting + " " + "My name is BAI - Brix A.I.")
 
+def check_plate (bot, update):
+	list_of_vi = VehicleCheck.check_violation ("51f-81420")
+	send_str = ""
+	for idx, report in enumerate(list_of_vi):
+		s1 = 'Loi %d' %(idx + 1)
+		s2 = 'Ngay vi pham: ' + report['date'].encode('latin-1').decode()
+		s3 = 'Vi tri vi pham: ' + report['place'].encode('latin-1').decode()
+		s4 = 'Loi vi pham: ' + report['description'].encode('latin-1').decode()
+		s5 = 'Co quan xu ly: ' + report['dept'].encode('latin-1').decode()
+		send_str = '\n'.join([send_str, s1, s2, s3, s4, s5])
+
+	send_me (send_str)
+
 def process_msg (bot, update):
 	msg = update.message.text
 	send_me ("You said " + msg)
@@ -66,9 +81,11 @@ def main ():
 	
 	# Adding handlers
 	start_hndl = CmdHndl ('start', start)
+	check_plate_hndl = CmdHndl ('check_plate', check_plate)
 	msg_hndl   = MsgHndl (Filters.text, process_msg)
 
 	dispatcher.add_handler (start_hndl)
+	dispatcher.add_handler (check_plate_hndl)
 	dispatcher.add_handler (msg_hndl)
 	
 	updater.start_polling()
