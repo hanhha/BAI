@@ -1,5 +1,4 @@
 import lxml.html 
-from argparse import ArgumentParser as ArgParser
 
 def check_violation (plate):
 	link = "http://tracuuvipham.com/partials/list.php?"
@@ -18,18 +17,3 @@ def check_violation (plate):
 		list_of_vi.append (vi_entry)
 
 	return list_of_vi
-
-#ap = ArgParser()
-#ap.add_argument ('-p', '--plate', default = '51f-81420', help = 'Plate number')
-#args = ap.parse_args ()
-#plate = args.plate
-#
-#list_of_vi = check_violation (plate)
-#
-#for idx, report in enumerate(list_of_vi):
-#	print 'Loi %d' %(idx + 1)
-#	print 'Ngay vi pham: %s'  %(report['date'])
-#	print 'Vi tri vi pham: %s'  %(report['place'])
-#	print 'Loi vi pham: %s'  %(report['description'])
-#	print 'Co quan xu ly: %s' %(report['dept'])
-
