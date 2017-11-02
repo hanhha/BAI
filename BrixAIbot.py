@@ -34,8 +34,12 @@ def error_cb (bot, update, error):
 	except TelegramError:
 		print ("Internal Telegram error")
 
-def send_me (text):
-	act_bot.send_message (chat_id = chat_id, text = text)
+def send_me (texts):
+	if (act_bot is not None) and (chat_id is not ""):
+		for idx, text in enumerate(texts):
+			act_bot.send_message (chat_id = chat_id, text = text)
+	else:
+		print ("Bot is not initialized - Please call /start first")
 
 def start (bot, update):
 	global chat_id, act_bot
@@ -51,24 +55,28 @@ def start (bot, update):
 	else:
 		greeting = "Greetings night owl."
 
-	send_me (greeting + " " + "My name is BAI - Brix A.I.")
+	send_me ([greeting + " " + "My name is BAI - Brix A.I."])
 
 def check_plate (bot, update):
 	list_of_vi = VehicleCheck.check_violation ("51f-81420")
-	send_str = ""
+	send_str = [] 
 	for idx, report in enumerate(list_of_vi):
 		s1 = 'Loi %d' %(idx + 1)
 		s2 = 'Ngay vi pham: ' + report['date'].encode('latin-1').decode()
 		s3 = 'Vi tri vi pham: ' + report['place'].encode('latin-1').decode()
 		s4 = 'Loi vi pham: ' + report['description'].encode('latin-1').decode()
 		s5 = 'Co quan xu ly: ' + report['dept'].encode('latin-1').decode()
-		send_str = '\n'.join([send_str, s1, s2, s3, s4, s5])
+		#send_str.extend([s1, s2, s3, s4, s5])
+		send_str.append('\n'.join([s1, s2, s3, s4, s5]))
 
-	send_me (send_str)
+	if len(send_str) == 0:
+		send_me (["No moving violation"])
+	else:
+		send_me (send_str)
 
 def process_msg (bot, update):
 	msg = update.message.text
-	send_me ("You said " + msg)
+	send_me (["You said " + msg])
 
 def main ():
 	config = CfgPsr.ConfigParser ()
@@ -90,7 +98,7 @@ def main ():
 	
 	updater.start_polling()
 	updater.idle()
-	send_me ("I'm offline right now. Good bye.")
+	send_me (["I'm offline right now. Good bye."])
 
 if __name__ == '__main__':
 	main()
