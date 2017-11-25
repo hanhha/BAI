@@ -50,6 +50,12 @@ class NoteBook:
 		else:
 			self.changed_timetree[year] = {month : {mday : [inttime]}}
 
+	def query_tags (self):
+		tagscloud = {}
+		for k, v in self.tags.items():
+			tagscloud [k] = len(v)
+		return tagscloud
+
 	def query_records (self, tags):
 		queried_records = {}
 		for tag in tags:

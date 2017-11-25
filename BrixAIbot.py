@@ -240,13 +240,26 @@ def process_msg (bot, update):
 	if (PA_sys.currentState == ASys.writingnote) or (PA_sys.currentState == ASys.writingdiary):
 		PA_sys.current_tags.extend(map (lambda x: x.strip().lower(), tag_re.findall(msg)))
 		PA_sys.current_tags = list(set(PA_sys.current_tags))
-		PA_sys.current_content += tag_re.sub (r'\1', msg)
+		PA_sys.current_content += '\n' + tag_re.sub (r'\1', msg)
 	else:
 		BAI_bot.respond (["You said " + msg])
 
-def show_records (book, args, All = False):
+def show_tags    (book, All = True, timestr = 'Anytime'):
+	if All:
+		preview_tags (book.query_tags())
+
+def show_records (book, tags = [], All = False, timestr = 'Anytime'):
 	if not All:
-		preview_records (book, book.query_records (map(lambda x: x.strip().lower(), args)))
+		stamplist = book.query_records (map(lambda x: x.strip().lower(), tags))
+	else:
+		stamplist = book.records.keys()
+	preview_records (book, stamplist)
+
+def preview_tags (tagscloud):
+	msg = ''
+	for k, v in tagscloud.items():
+		msg += '{0}({1}) '.format(k,v)
+	BAI_bot.respond (msg)
 
 def preview_records (book, records_stamplist):
 	for stamp in records_stamplist:
@@ -317,8 +330,13 @@ class ASys (FSM.StateMachine):
 	def note (self, bot, update, args):
 		if len(args) == 0:
 			self.on_event (BotAction.record, {"type": "note", "args": args})
-		elif args[0].strip().lower() == 'all':
-			show_records (Notebook, args, All=True)
+		elif (len(args) == 1):
+			if args[0].strip().lower() == 'all':
+				show_records (Notebook, args, All=True)
+			if args[0].strip().lower() == 'tags':
+				show_tags    (Notebook)
+			else:
+				show_records (Notebook, args, All=False)
 		else:
 			show_records (Notebook, args, All=False)
 
