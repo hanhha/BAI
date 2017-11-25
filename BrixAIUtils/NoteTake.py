@@ -159,7 +159,7 @@ class NoteBook:
 			if sep_mark.match(line):
 				is_content_read = True
 			else:
-				content += line.strip()
+				content += line
 			if is_content_read and is_tags_read and is_stamp_read:
 				records [timestamp] = {'timestamp': timestamp,
 															 'tags': list(set(tags.copy())),
