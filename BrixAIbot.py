@@ -118,10 +118,11 @@ class BotAction (FSM.Action):
 	def __init__ (self, action):
 		FSM.Action.__init__ (self, action, "Bot")
 
-BotAction.initialize = BotAction ("initialize")
-BotAction.record     = BotAction ("record")
-BotAction.end        = BotAction ("end")
-BotAction.cancel     = BotAction ("cancel")
+BotAction.initialize     = BotAction ("initialize")
+BotAction.record         = BotAction ("record")
+BotAction.tempswitchwork = BotAction ("tempswitchwork")
+BotAction.end            = BotAction ("end")
+BotAction.cancel         = BotAction ("cancel")
 
 class Void (FSM.State):
 	def __init__ (self):
@@ -144,10 +145,15 @@ class Init (FSM.State):
 		if input == BotAction.record:
 			if args['type'] == 'note':
 				BAI_bot.respond ("Recording note. You can save it by /end with tags separated by comma.")
-				return ASys.writingnote
+				return ASys.worknote
 			elif args['type'] == 'diary':
 				BAI_bot.respond ("Recording diary. You can save it by /end with tags separated by comma.")
-				return ASys.writingdiary
+				return ASys.workdiary
+		elif input == BotAction.tempswitchwork:
+			if args['type'] == 'note':
+				return ASys.worknote
+			elif args['type'] == 'diary':
+				return ASys.workdiary
 		BAI_bot.respond ("Very sorry, I don't have this function right now")
 		return self
 
@@ -155,24 +161,31 @@ class Idle (FSM.State):
 	def __init__ (self):
 		FSM.State.__init__ (self, "Idle")
 	def run(self, input, args):
-		BAI_bot.respond ("I'm here to serve you")
+		pass
 	def next(self, input, args):
 		if input == BotAction.record:
 			if args['type'] == 'note':
 				BAI_bot.respond ("Recording note. You can save it by /end with tags separated by comma.")
-				return ASys.writingnote
+				return ASys.worknote
 			elif args['type'] == 'diary':
 				BAI_bot.respond ("Recording diary. You can save it by /end with tags separated by comma.")
-				return ASys.writingdiary
+				return ASys.workdiary
+		elif input == BotAction.tempswitchwork:
+			if args['type'] == 'note':
+				return ASys.worknote
+			elif args['type'] == 'diary':
+				return ASys.workdiary
 		BAI_bot.respond ("Very sorry, I don't have this function right now")
 		return self
 
-class WritingNote (FSM.State):
+class WorkNote (FSM.State):
 	def __init__ (self):
-		FSM.State.__init__ (self, "WritingNote")
+		FSM.State.__init__ (self, "WorkNote")
 	def run(self, input, args):
 		pass
 	def next(self, input, args):
+		if input == BotAction.record:
+			BAI_bot.respond ("I'm recording.")
 		if input == BotAction.end:
 			if len(args['current_content']) != 0:
 				record = NoteTake.NoteBook.shape_record (args['current_content'], args['current_tags'])
@@ -188,15 +201,16 @@ class WritingNote (FSM.State):
 		elif input == BotAction.cancel:
 			BAI_bot.respond ("Canceled")
 			return ASys.idle
-		BAI_bot.respond ("What do you want to do with current recording?")
 		return self
 
-class WritingDiary (FSM.State):
+class WorkDiary (FSM.State):
 	def __init__ (self):
-		FSM.State.__init__ (self, "WritingDiary")
+		FSM.State.__init__ (self, "WorkDiary")
 	def run(self, input, args):
 		pass
 	def next(self, input, args):
+		if input == BotAction.record:
+			BAI_bot.respond ("I'm recording.")
 		if input == BotAction.end:
 			record = NoteTake.NoteBook.shape_record (args['current_content'], args['current_tags'])
 			Diary.new_record (record)
@@ -212,7 +226,6 @@ class WritingDiary (FSM.State):
 		elif input == BotAction.cancel:
 			BAI_bot.respond ("Canceled")
 			return ASys.idle
-		BAI_bot.respond ("What do you want to do with current writing?")
 		return self
 
 def movement_violate_report_str (no, report):
@@ -263,12 +276,13 @@ def process_msg (bot, update):
 	tag_re = re.compile(r"(\w+),,,")
 
 	msg = update.message.text
-	if (PA_sys.currentState == ASys.writingnote) or (PA_sys.currentState == ASys.writingdiary):
+	if (PA_sys.currentState == ASys.worknote) or (PA_sys.currentState == ASys.workdiary):
 		PA_sys.current_tags.extend(map (lambda x: x.strip().lower(), tag_re.findall(msg)))
 		PA_sys.current_tags = list(set(PA_sys.current_tags))
 		PA_sys.current_content += '\n' + tag_re.sub (r'\1', msg)
 	else:
 		BAI_bot.respond (["You said " + msg])
+		BAI_bot.respond ("I'm here to serve you")
 
 def show_tags    (book, All = True, timestr = 'Anytime'):
 	if All:
@@ -303,8 +317,14 @@ def select (bot, update):
 	if options.SelectDone:
 		bot.edit_message_text(text='Selected tags: ' + select_str,
 				chat_id=query.message.chat_id, message_id=query.message.message_id)
-		show_records (Notebook, options.selected_data_list, All=options.AllOptionSelected)
+		if PA_sys.currentState == ASys.worknote:
+			book = Notebook
+		elif PA_sys.currentState == ASys.workdiary:
+			book = Diary
+		show_records (book, options.selected_data_list, All=options.AllOptionSelected)
+		PA_sys.withdrawwork()
 	elif options.SelectCancel:
+		PA_sys.withdrawwork()
 		bot.edit_message_text(text='Canceled.',
 				chat_id=query.message.chat_id, message_id=query.message.message_id)
 	else:
@@ -392,6 +412,7 @@ class ASys (FSM.StateMachine):
 			if args[0].strip().lower() == 'all':
 				show_records (Notebook, args, All=True)
 			elif args[0].strip().lower() == 'tags':
+				self.switchwork (ASys.worknote)
 				show_tags    (Notebook)
 			else:
 				show_records (Notebook, args, All=False)
@@ -401,8 +422,14 @@ class ASys (FSM.StateMachine):
 	def diary (self, bot, update, args):
 		if len(args) == 0:
 			self.on_event (BotAction.record, {"type": "diary", "args": args})	
-		elif args[0].strip().lower() == 'all':
-			show_records (Diary, args, All=True)
+		elif (len(args) == 1):
+			if args[0].strip().lower() == 'all':
+				show_records (Diary, args, All=True)
+			elif args[0].strip().lower() == 'tags':
+				self.switchwork (ASys.workdiary)
+				show_tags    (Diary)
+			else:
+				show_records (Diary, args, All=False)
 		else:
 			show_records (Diary, args, All=False)
 
@@ -421,8 +448,8 @@ class ASys (FSM.StateMachine):
 ASys.void           = Void ()
 ASys.init           = Init ()
 ASys.idle           = Idle ()
-ASys.writingnote    = WritingNote ()
-ASys.writingdiary   = WritingDiary ()
+ASys.worknote    = WorkNote ()
+ASys.workdiary   = WorkDiary ()
 
 PA_sys                = ASys ()
 

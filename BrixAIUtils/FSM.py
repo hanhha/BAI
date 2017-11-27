@@ -18,6 +18,13 @@ class StateMachine:
 		self._currentState = initialState
 
 	# Template method
+	def switchwork (self, tempState):
+		self._prvState = self._currentState
+		self._currentState = tempState
+	
+	def withdrawwork (self):
+		self._currentState = self._prvState
+
 	def on_event (self, input, args):
 			self._currentState = self.currentState.next(input, args)
 			self._currentState.run (input, args)
