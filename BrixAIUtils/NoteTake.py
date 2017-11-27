@@ -125,6 +125,8 @@ class NoteBook:
 
 	@staticmethod
 	def shape_record (content, tags):
+		if len(tags) == 0:
+			tags = ['untagged']
 		return {
 						'timestamp': int(time()),
 						'tags': list(set(tags.copy())),

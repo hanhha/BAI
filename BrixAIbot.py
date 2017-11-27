@@ -128,7 +128,7 @@ class Void (FSM.State):
 	def __init__ (self):
 		FSM.State.__init__ (self, "Void")
 	def run(self, input, args):
-		print ("Void")
+		print (self)
 	def next(self, input, args):
 		if input == BotAction.initialize:
 			return ASys.init
@@ -138,6 +138,7 @@ class Init (FSM.State):
 	def __init__ (self):
 		FSM.State.__init__ (self, "Init")
 	def run(self, input, args):
+		print (self)
 		BAI_bot.initialize (args["bot"], args["update"])
 		BAI_bot.greeting ()
 		BAI_bot.respond ("I'm here to serve you")
@@ -161,7 +162,7 @@ class Idle (FSM.State):
 	def __init__ (self):
 		FSM.State.__init__ (self, "Idle")
 	def run(self, input, args):
-		pass
+		print (self)
 	def next(self, input, args):
 		if input == BotAction.record:
 			if args['type'] == 'note':
@@ -182,7 +183,7 @@ class WorkNote (FSM.State):
 	def __init__ (self):
 		FSM.State.__init__ (self, "WorkNote")
 	def run(self, input, args):
-		pass
+		print ("WorkNote")
 	def next(self, input, args):
 		if input == BotAction.record:
 			BAI_bot.respond ("I'm recording.")
@@ -197,6 +198,8 @@ class WorkNote (FSM.State):
 																															book = Notebook: show_record (book, arg))
 				BAI_bot.add_handler (PA_sys.note_read_hndl [record['timestamp']])
 				BAI_bot.respond ("Your note has been saved.")
+			else:
+				BAI_bot.respond ("Nothing to record.")
 			return ASys.idle
 		elif input == BotAction.cancel:
 			BAI_bot.respond ("Canceled")
@@ -207,21 +210,24 @@ class WorkDiary (FSM.State):
 	def __init__ (self):
 		FSM.State.__init__ (self, "WorkDiary")
 	def run(self, input, args):
-		pass
+		print ("WorkDiary")
 	def next(self, input, args):
 		if input == BotAction.record:
 			BAI_bot.respond ("I'm recording.")
 		if input == BotAction.end:
-			record = NoteTake.NoteBook.shape_record (args['current_content'], args['current_tags'])
-			Diary.new_record (record)
-			Diary.store_notebook ()
-			PA_sys.diary_read_hndl[record['timestamp']] = CmdHndl (str(record['timestamp']), 
-																														 lambda bot,
-																														 update, arg =
-																														 record['timestamp'],
-																														 book = Diary: show_record (book, arg))
-			BAI_bot.add_handler (PA_sys.diary_read_hndl [record['timestamp']])
-			BAI_bot.respond ("Your entry has been saved.")
+			if len(args['current_content']) != 0:
+				record = NoteTake.NoteBook.shape_record (args['current_content'], args['current_tags'])
+				Diary.new_record (record)
+				Diary.store_notebook ()
+				PA_sys.diary_read_hndl[record['timestamp']] = CmdHndl (str(record['timestamp']), 
+																															 lambda bot,
+																															 update, arg =
+																															 record['timestamp'],
+																															 book = Diary: show_record (book, arg))
+				BAI_bot.add_handler (PA_sys.diary_read_hndl [record['timestamp']])
+				BAI_bot.respond ("Your entry has been saved.")
+			else:
+				BAI_bot.respond ("Nothing to record.")
 			return ASys.idle
 		elif input == BotAction.cancel:
 			BAI_bot.respond ("Canceled")
@@ -278,8 +284,11 @@ def process_msg (bot, update):
 	msg = update.message.text
 	if (PA_sys.currentState == ASys.worknote) or (PA_sys.currentState == ASys.workdiary):
 		PA_sys.current_tags.extend(map (lambda x: x.strip().lower(), tag_re.findall(msg)))
-		PA_sys.current_tags = list(set(PA_sys.current_tags))
-		PA_sys.current_content += '\n' + tag_re.sub (r'\1', msg)
+		PA_sys.current_tags = list(set(PA_sys.current_tags)) 
+		if PA_sys.current_content == '':
+			PA_sys.current_content = tag_re.sub(r'\1', msg)
+		else:
+			PA_sys.current_content += '\n' + tag_re.sub(r'\1', msg)
 	else:
 		BAI_bot.respond (["You said " + msg])
 		BAI_bot.respond ("I'm here to serve you")
@@ -301,7 +310,7 @@ def show_records (book, tags = [], All = False, timestr = 'Anytime'):
 options = Utils.InlineOptions ("Tags")
 
 def preview_tags (tagscloud):
-	total = reduce (lambda x, y: x + y, tagscloud.values())
+	print (tagscloud)
 	option_list = []
 	callback_list = []
 	for k, v in sorted(tagscloud.items(), key = lambda t: t[1], reverse = True):
