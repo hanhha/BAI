@@ -453,6 +453,9 @@ class ASys (FSM.StateMachine):
 		self.on_event (BotAction.cancel, {})	
 		self.current_content = ''
 		self.current_tags    = []
+	
+	def transition_disable_info(self):
+		BAI_bot.respond ('Please finish previous activity. All preemptive activities were abandoned.')
 
 ASys.void           = Void ()
 ASys.init           = Init ()
