@@ -4,6 +4,7 @@ from functools import reduce
 import re
 import copy
 import os
+from itertools import chain
 
 def listdir_nohidden (path):
 	return list(filter(lambda f: not f.startswith('.'), os.listdir(path)))
@@ -66,8 +67,10 @@ class NoteBook:
 		if len(queried_records) == 0:
 			return []
 		else:
-			return list(reduce((lambda l1, l2 : filter (lambda l: l in l2, l1)),
-				queried_records.values()))
+			#return list(reduce((lambda l1, l2 : filter (lambda l: l in l2, l1)), queried_records.values()))
+			queried_records = list(chain.from_iterable(queried_records.values()))
+			ret_list = list(set(queried_records))
+			return ret_list
 
 	def store_notebook (self):
 		"""
@@ -154,6 +157,8 @@ class NoteBook:
 					continue
 			if not is_tags_read:
 				tags = [tag.strip().lower() for tag in line.split(',')]
+				if len(tags) == 0:
+					tags = ['untagged']
 				is_tags_read = True
 				continue
 			if sep_mark.match(line):

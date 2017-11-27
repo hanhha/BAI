@@ -1,23 +1,21 @@
 #!/usr/bin/env python3
 
-from telegram.ext import Updater
-from telegram.ext import CommandHandler as CmdHndl
-from telegram.ext import MessageHandler as MsgHndl
-from telegram.ext import Filters
-from telegram.error import (TelegramError, Unauthorized, BadRequest, TimedOut,
-		ChatMigrated, NetworkError)
+from telegram.ext import (Updater, Filters)
+from telegram.ext import (CommandHandler as CmdHndl, MessageHandler as MsgHndl, CallbackQueryHandler as CbQHndl)
+from telegram.error import (TelegramError, Unauthorized, BadRequest, TimedOut, ChatMigrated, NetworkError)
+from telegram import constants
+
 import logging
 import configparser as CfgPsr
 
 from datetime import datetime
-from time import localtime, strftime
+from time import (localtime, strftime)
 
-from BrixAIUtils import VehicleCheck 
-from BrixAIUtils import FSM
-from BrixAIUtils import NoteTake
+from BrixAIUtils import (VehicleCheck, FSM, NoteTake, DictLookup, Utils)
 
-import re
+import re, operator
 from argparse import ArgumentParser
+from functools import reduce
 
 parser = ArgumentParser()
 parser.add_argument ('-p', '--path', type=str, help = 'path of root dir of notebook')
@@ -31,7 +29,6 @@ Notebook = NoteTake.NoteBook (args.notebook, args.path)
 Diary    = NoteTake.NoteBook (args.diary, args.path)
 
 class ABot:
-	#config_filename = '/etc/telegram-send.conf'
 	config_filename = args.config
 	
 	act_name    = ""
@@ -45,10 +42,9 @@ class ABot:
 		try:
 			raise error
 		except Unauthorized:
-			print ("Unautorized") 
+			print ("Unauthorized") 
 		except BadRequest:
 			print ("Malformed requests")
-			print ("Unautorized") 
 		except TimedOut:
 			print ("Slow connection")
 		except NetworkError:
@@ -58,12 +54,28 @@ class ABot:
 		except TelegramError:
 			print ("Internal Telegram error")
 
-	def respond (self, texts):
+	def respond (self, texts, short = False, **kwargs):
+		chunk_size = 1000 # 1000 chars
+		short_chunk= 50
 		if type(texts) is list:
 			for idx, text in enumerate(texts):
-				self.act_bot.send_message (self.act_chat_id, text = text)
+				if short:
+					text = text [:50]
+				if len(text) > chunk_size:
+					chunks = len(text)
+					chunks = [text[i:i+chunk_size] for i in range(0, chunks, chunk_size)]
+					self.respond (chunks, short = short, **kwargs)
+				else:
+					self.act_bot.send_message (self.act_chat_id, text = text, **kwargs)
 		else:
-			self.act_bot.send_message (self.act_chat_id, text = texts)
+			if short:
+				texts = texts [:50]
+			if len(texts) > chunk_size:
+				chunks = len(text)
+				chunks = [text[i:i+chunk_size] for i in range(0, chunks, chunk_size)]
+				self.respond (chunks, short = short, **kwargs)
+			else:
+				self.act_bot.send_message (self.act_chat_id, text = texts, **kwargs)
 
 	def initialize (self, bot, update):
 		self.act_chat_id = update.message.chat_id
@@ -101,7 +113,6 @@ class ABot:
 		logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 BAI_bot               = ABot (args.botname)
-
 
 class BotAction (FSM.Action):
 	def __init__ (self, action):
@@ -163,15 +174,16 @@ class WritingNote (FSM.State):
 		pass
 	def next(self, input, args):
 		if input == BotAction.end:
-			record = NoteTake.NoteBook.shape_record (args['current_content'], args['current_tags'])
-			Notebook.new_record (record)
-			Notebook.store_notebook ()
-			PA_sys.note_read_hndl[record['timestamp']] = CmdHndl (str(record['timestamp']), 
-																														lambda bot, 
-																														update, arg = record['timestamp'],
-																														book = Notebook: show_record (book, arg))
-			BAI_bot.add_handler (PA_sys.note_read_hndl [record['timestamp']])
-			BAI_bot.respond ("Your note has been saved.")
+			if len(args['current_content']) != 0:
+				record = NoteTake.NoteBook.shape_record (args['current_content'], args['current_tags'])
+				Notebook.new_record (record)
+				Notebook.store_notebook ()
+				PA_sys.note_read_hndl[record['timestamp']] = CmdHndl (str(record['timestamp']), 
+																															lambda bot, 
+																															update, arg = record['timestamp'],
+																															book = Notebook: show_record (book, arg))
+				BAI_bot.add_handler (PA_sys.note_read_hndl [record['timestamp']])
+				BAI_bot.respond ("Your note has been saved.")
 			return ASys.idle
 		elif input == BotAction.cancel:
 			BAI_bot.respond ("Canceled")
@@ -203,18 +215,21 @@ class WritingDiary (FSM.State):
 		BAI_bot.respond ("What do you want to do with current writing?")
 		return self
 
+def movement_violate_report_str (no, report):
+	s1 = 'Loi %d' %(no + 1)
+	s2 = 'Ngay vi pham: ' + report['date'].encode('latin-1').decode()
+	s3 = 'Vi tri vi pham: ' + report['place'].encode('latin-1').decode()
+	s4 = 'Loi vi pham: ' + report['description'].encode('latin-1').decode()
+	s5 = 'Co quan xu ly: ' + report['dept'].encode('latin-1').decode()
+	return '\n'.join([s1, s2, s3, s4, s5])
+
 def check_plate (bot, update, args):
 	send_str = [] 
 	if len(args) == 0:
 		list_of_vi = VehicleCheck.check_violation ("51f-81420")
 		if len(list_of_vi) != 0:
 			for idx, report in enumerate(list_of_vi):
-				s1 = 'Loi %d' %(idx + 1)
-				s2 = 'Ngay vi pham: ' + report['date'].encode('latin-1').decode()
-				s3 = 'Vi tri vi pham: ' + report['place'].encode('latin-1').decode()
-				s4 = 'Loi vi pham: ' + report['description'].encode('latin-1').decode()
-				s5 = 'Co quan xu ly: ' + report['dept'].encode('latin-1').decode()
-				send_str.append('\n'.join([s1, s2, s3, s4, s5]))
+				send_str.append(movement_violate_report_str(idx, report))
 		else:
 			send_str.append('No moving violation')
 	else:
@@ -223,15 +238,26 @@ def check_plate (bot, update, args):
 			list_of_vi = VehicleCheck.check_violation (plate)
 			if len(list_of_vi) != 0:
 				for idx, report in enumerate(list_of_vi):
-					s1 = 'Loi %d' %(idx + 1)
-					s2 = 'Ngay vi pham: ' + report['date'].encode('latin-1').decode()
-					s3 = 'Vi tri vi pham: ' + report['place'].encode('latin-1').decode()
-					s4 = 'Loi vi pham: ' + report['description'].encode('latin-1').decode()
-					s5 = 'Co quan xu ly: ' + report['dept'].encode('latin-1').decode()
-					send_str.append('\n'.join([s1, s2, s3, s4, s5]))
+					send_str.append(movement_violate_report_str(idx, report))
 			else:
 				send_str.append('No moving violation')
 	BAI_bot.respond (send_str)
+
+def lookup (args):
+	send_str = []
+	if len(args) == 0:
+		send_str = ['Maybe next time.']
+	else:
+		for word in args:
+			pron, desc, rela = DictLookup.lookup (word.strip().lower())
+			send_str.append (word + '\n' + pron +  desc + ''.join(rela))
+	return send_str
+
+def short_lookup (bot, update, args):
+	BAI_bot.respond( lookup (args), short = True)
+
+def detail_lookup (bot, update, args):
+	BAI_bot.respond( lookup (args), short = False)
 
 def process_msg (bot, update):
 	tag_re = re.compile(r"(\w+),,,")
@@ -253,13 +279,38 @@ def show_records (book, tags = [], All = False, timestr = 'Anytime'):
 		stamplist = book.query_records (map(lambda x: x.strip().lower(), tags))
 	else:
 		stamplist = book.records.keys()
-	preview_records (book, stamplist)
+	if len(stamplist) == 0:
+		BAI_bot.respond("There is no record.")
+	else:
+		preview_records (book, stamplist)
+
+options = Utils.InlineOptions ("Tags")
 
 def preview_tags (tagscloud):
-	msg = ''
-	for k, v in tagscloud.items():
-		msg += '{0}({1}) '.format(k,v)
-	BAI_bot.respond (msg)
+	total = reduce (lambda x, y: x + y, tagscloud.values())
+	option_list = []
+	callback_list = []
+	for k, v in sorted(tagscloud.items(), key = lambda t: t[1], reverse = True):
+		option_list.append('{0}({1})'.format(k,v))
+		callback_list.append(k)
+	options.set_options (option_list, callback_list, hasAll = True, hasDone = True, hasCancel = True)
+	BAI_bot.respond ('Select tags:', reply_markup = options.get_InlineKeyboardMarkup()) 
+
+def select (bot, update):
+	query = update.callback_query
+	options.select (query.data)
+	select_str = ', '.join(options.selected_data_list)
+	if options.SelectDone:
+		bot.edit_message_text(text='Selected tags: ' + select_str,
+				chat_id=query.message.chat_id, message_id=query.message.message_id)
+		show_records (Notebook, options.selected_data_list, All=options.AllOptionSelected)
+	elif options.SelectCancel:
+		bot.edit_message_text(text='Canceled.',
+				chat_id=query.message.chat_id, message_id=query.message.message_id)
+	else:
+		bot.edit_message_text(text='Select tags: ' + select_str,
+				chat_id=query.message.chat_id, message_id=query.message.message_id,
+				reply_markup = options.get_InlineKeyboardMarkup())
 
 def preview_records (book, records_stamplist):
 	for stamp in records_stamplist:
@@ -271,6 +322,7 @@ def preview_records (book, records_stamplist):
 		else:
 			msg += record['content'][0:50]
 		BAI_bot.respond (msg)
+	BAI_bot.respond ("That's all.")
 	
 def record2str (book, timestamp):
 	record_time, tags, content = NoteTake.NoteBook.unshape_record (book.records[timestamp])
@@ -297,6 +349,9 @@ class ASys (FSM.StateMachine):
 		cmd_end_hndl          = CmdHndl ('end', self.end, pass_args = True)
 		cmd_cancel_hndl       = CmdHndl ('cancel', self.cancel)
 		cmd_checkPlate_hndl   = CmdHndl ('check_plate', check_plate, pass_args = True)
+		cmd_slookup_hndl      = CmdHndl ('lookup', short_lookup, pass_args = True)
+		cmd_llookup_hndl      = CmdHndl ('detail_lookup', detail_lookup, pass_args = True)
+		query_select_hndl     = CbQHndl (select)
 		msg_hndl              = MsgHndl (Filters.text, process_msg)
 		
 		BAI_bot.add_handler (cmd_start_hndl)
@@ -305,6 +360,9 @@ class ASys (FSM.StateMachine):
 		BAI_bot.add_handler (cmd_end_hndl)
 		BAI_bot.add_handler (cmd_cancel_hndl)
 		BAI_bot.add_handler (cmd_checkPlate_hndl)
+		BAI_bot.add_handler (cmd_slookup_hndl)
+		BAI_bot.add_handler (cmd_llookup_hndl)
+		BAI_bot.add_handler (query_select_hndl)
 		BAI_bot.add_handler (msg_hndl)
 
 		self.note_read_hndl = {}
@@ -333,7 +391,7 @@ class ASys (FSM.StateMachine):
 		elif (len(args) == 1):
 			if args[0].strip().lower() == 'all':
 				show_records (Notebook, args, All=True)
-			if args[0].strip().lower() == 'tags':
+			elif args[0].strip().lower() == 'tags':
 				show_tags    (Notebook)
 			else:
 				show_records (Notebook, args, All=False)
