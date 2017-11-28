@@ -189,14 +189,14 @@ class WorkNote (FSM.State):
 			BAI_bot.respond ("I'm recording.")
 		if input == BotAction.end:
 			if len(args['current_content']) != 0:
-				record = NoteTake.NoteBook.shape_record (args['current_content'], args['current_tags'])
+				record = NoteTake.Entry(NoteTake.Entry.shape_record (args['current_content'], args['current_tags']))
 				Notebook.new_record (record)
 				Notebook.store_notebook ()
-				PA_sys.note_read_hndl[record['timestamp']] = CmdHndl (str(record['timestamp']), 
+				PA_sys.note_read_hndl[record.timestamp] = CmdHndl (str(record.timestamp), 
 																															lambda bot, 
-																															update, arg = record['timestamp'],
+																															update, arg = record.timestamp,
 																															book = Notebook: show_record (book, arg))
-				BAI_bot.add_handler (PA_sys.note_read_hndl [record['timestamp']])
+				BAI_bot.add_handler (PA_sys.note_read_hndl [record.timestamp])
 				BAI_bot.respond ("Your note has been saved.")
 			else:
 				BAI_bot.respond ("Nothing to record.")
@@ -216,15 +216,15 @@ class WorkDiary (FSM.State):
 			BAI_bot.respond ("I'm recording.")
 		if input == BotAction.end:
 			if len(args['current_content']) != 0:
-				record = NoteTake.NoteBook.shape_record (args['current_content'], args['current_tags'])
+				record = NoteTake.Entry(NoteTake.Entry.shape_record (args['current_content'], args['current_tags']))
 				Diary.new_record (record)
 				Diary.store_notebook ()
-				PA_sys.diary_read_hndl[record['timestamp']] = CmdHndl (str(record['timestamp']), 
+				PA_sys.diary_read_hndl[record.timestamp] = CmdHndl (str(record.timestamp), 
 																															 lambda bot,
 																															 update, arg =
-																															 record['timestamp'],
+																															 record.timestamp,
 																															 book = Diary: show_record (book, arg))
-				BAI_bot.add_handler (PA_sys.diary_read_hndl [record['timestamp']])
+				BAI_bot.add_handler (PA_sys.diary_read_hndl [record.timestamp])
 				BAI_bot.respond ("Your entry has been saved.")
 			else:
 				BAI_bot.respond ("Nothing to record.")
