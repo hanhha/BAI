@@ -95,6 +95,7 @@ class Entry:
     char_quota = preview
     for timestamp, content in sorted (self.record['content'].items(), key = lambda t: t[0], reverse = False):
       if (preview == 0) or (preview > 0 and char_quota > 0):
+        ret_str += '\n'
         if timestamp == self.record ['timestamp']:
           ret_str += self.date_str (timestamp, "Created in ", Markdown, ftime) + '\n'
         else:
