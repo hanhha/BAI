@@ -43,12 +43,12 @@ class ABot:
 			raise error
 		except Unauthorized:
 			print ("Unauthorized") 
-		#except BadRequest:
-		#	print ("Malformed requests")
+		except BadRequest:
+			print ("Malformed requests")
 		except TimedOut:
 			print ("Slow connection")
-		#except NetworkError:
-		#	print ("Network error")
+		except NetworkError:
+			print ("Network error")
 		except ChatMigrate as e:
 			print ("Chat ID of group has changed") 
 		except TelegramError:
@@ -60,21 +60,23 @@ class ABot:
 		if type(texts) is list:
 			for idx, text in enumerate(texts):
 				if short:
-					text = text [:50]
+					text = text [:short_chunk]
 				if len(text) > chunk_size:
 					chunks = len(text)
-					chunks = [text[i:i+chunk_size] for i in range(0, chunks, chunk_size)]
-					self.respond (chunks, short = short, **kwargs)
+					text_chunks = [text[i:i+chunk_size] for i in range(0, chunks, chunk_size)]
+					self.respond (text_chunks, short = short, **kwargs)
 				else:
+					#print (text)
 					self.act_bot.send_message (self.act_chat_id, text = text, **kwargs)
 		else:
 			if short:
-				texts = texts [:50]
+				texts = texts [:short_chunk]
 			if len(texts) > chunk_size:
 				chunks = len(text)
-				chunks = [text[i:i+chunk_size] for i in range(0, chunks, chunk_size)]
-				self.respond (chunks, short = short, **kwargs)
+				text_chunks = [text[i:i+chunk_size] for i in range(0, chunks, chunk_size)]
+				self.respond (text_chunks, short = short, **kwargs)
 			else:
+				#print (texts)
 				self.act_bot.send_message (self.act_chat_id, text = texts, **kwargs)
 
 	def initialize (self, bot, update):
@@ -243,55 +245,60 @@ def movement_violate_report_str (no, report):
 	return '\n'.join([s1, s2, s3, s4, s5])
 
 def check_plate (bot, update, args):
-	send_str = [] 
-	if len(args) == 0:
-		list_of_vi = VehicleCheck.check_violation ("51f-81420")
-		if len(list_of_vi) != 0:
-			for idx, report in enumerate(list_of_vi):
-				send_str.append(movement_violate_report_str(idx, report))
-		else:
-			send_str.append('No moving violation')
-	else:
-		for pidx, plate in enumerate(args):
-			BAI_bot.respond ("Bien so %s" %(plate))
-			list_of_vi = VehicleCheck.check_violation (plate)
+	if PA_sys.currentState is not ASys.void:
+		send_str = [] 
+		if len(args) == 0:
+			list_of_vi = VehicleCheck.check_violation ("51f-81420")
 			if len(list_of_vi) != 0:
 				for idx, report in enumerate(list_of_vi):
 					send_str.append(movement_violate_report_str(idx, report))
 			else:
 				send_str.append('No moving violation')
-	BAI_bot.respond (send_str)
+		else:
+			for pidx, plate in enumerate(args):
+				BAI_bot.respond ("Bien so %s" %(plate))
+				list_of_vi = VehicleCheck.check_violation (plate)
+				if len(list_of_vi) != 0:
+					for idx, report in enumerate(list_of_vi):
+						send_str.append(movement_violate_report_str(idx, report))
+				else:
+					send_str.append('No moving violation')
+		BAI_bot.respond (send_str)
 
 def lookup (args):
-	send_str = []
-	if len(args) == 0:
-		send_str = ['Maybe next time.']
-	else:
-		for word in args:
-			pron, desc, rela = DictLookup.lookup (word.strip().lower())
-			send_str.append (word + '\n' + pron +  desc + ''.join(rela))
-	return send_str
+	if PA_sys.currentState is not ASys.void:
+		send_str = []
+		if len(args) == 0:
+			send_str = ['Maybe next time.']
+		else:
+			for word in args:
+				pron, desc, rela = DictLookup.lookup (word.strip().lower())
+				send_str.append (word + '\n' + pron +  desc + ''.join(rela))
+		return send_str
 
 def short_lookup (bot, update, args):
-	BAI_bot.respond( lookup (args), short = True)
+	if PA_sys.currentState is not ASys.void:
+		BAI_bot.respond( lookup (args), short = True)
 
 def detail_lookup (bot, update, args):
-	BAI_bot.respond( lookup (args), short = False)
+	if PA_sys.currentState is not ASys.void:
+		BAI_bot.respond( lookup (args), short = False)
 
 def process_msg (bot, update):
-	tag_re = re.compile(r"(\w+),,,")
+	if PA_sys.currentState is not ASys.void:
+		tag_re = re.compile(r"(\w+),,,")
 
-	msg = update.message.text
-	if (PA_sys.currentState == ASys.worknote) or (PA_sys.currentState == ASys.workdiary):
-		PA_sys.current_tags.extend(map (lambda x: x.strip().lower(), tag_re.findall(msg)))
-		PA_sys.current_tags = list(set(PA_sys.current_tags)) 
-		if PA_sys.current_content == '':
-			PA_sys.current_content = tag_re.sub(r'\1', msg)
+		msg = update.message.text
+		if (PA_sys.currentState == ASys.worknote) or (PA_sys.currentState == ASys.workdiary):
+			PA_sys.current_tags.extend(map (lambda x: x.strip().lower(), tag_re.findall(msg)))
+			PA_sys.current_tags = list(set(PA_sys.current_tags)) 
+			if PA_sys.current_content == '':
+				PA_sys.current_content = tag_re.sub(r'\1', msg)
+			else:
+				PA_sys.current_content += '\n' + tag_re.sub(r'\1', msg)
 		else:
-			PA_sys.current_content += '\n' + tag_re.sub(r'\1', msg)
-	else:
-		BAI_bot.respond (["You said " + msg])
-		BAI_bot.respond ("I'm here to serve you")
+			BAI_bot.respond (["You said " + msg])
+			BAI_bot.respond ("I'm here to serve you")
 
 def show_tags    (book, All = True, timestr = 'Anytime'):
 	if All:
@@ -320,26 +327,27 @@ def preview_tags (tagscloud):
 	BAI_bot.respond ('Select tags:', reply_markup = options.get_InlineKeyboardMarkup()) 
 
 def select (bot, update):
-	query = update.callback_query
-	options.select (query.data)
-	select_str = ', '.join(options.selected_data_list)
-	if options.SelectDone:
-		bot.edit_message_text(text='Selected tags: ' + select_str,
-				chat_id=query.message.chat_id, message_id=query.message.message_id)
-		if PA_sys.currentState == ASys.worknote:
-			book = Notebook
-		elif PA_sys.currentState == ASys.workdiary:
-			book = Diary
-		show_records (book, options.selected_data_list, All=options.AllOptionSelected)
-		PA_sys.withdrawwork()
-	elif options.SelectCancel:
-		PA_sys.withdrawwork()
-		bot.edit_message_text(text='Canceled.',
-				chat_id=query.message.chat_id, message_id=query.message.message_id)
-	else:
-		bot.edit_message_text(text='Select tags: ' + select_str,
-				chat_id=query.message.chat_id, message_id=query.message.message_id,
-				reply_markup = options.get_InlineKeyboardMarkup())
+	if PA_sys.currentState is not ASys.void:
+		query = update.callback_query
+		options.select (query.data)
+		select_str = ', '.join(options.selected_data_list)
+		if options.SelectDone:
+			bot.edit_message_text(text='Selected tags: ' + select_str,
+					chat_id=query.message.chat_id, message_id=query.message.message_id)
+			if PA_sys.currentState == ASys.worknote:
+				book = Notebook
+			elif PA_sys.currentState == ASys.workdiary:
+				book = Diary
+			show_records (book, options.selected_data_list, All=options.AllOptionSelected)
+			PA_sys.withdrawwork()
+		elif options.SelectCancel:
+			PA_sys.withdrawwork()
+			bot.edit_message_text(text='Canceled.',
+					chat_id=query.message.chat_id, message_id=query.message.message_id)
+		else:
+			bot.edit_message_text(text='Select tags: ' + select_str,
+					chat_id=query.message.chat_id, message_id=query.message.message_id,
+					reply_markup = options.get_InlineKeyboardMarkup())
 
 def preview_records (book, records_stamplist):
 	for stamp in records_stamplist:
@@ -404,44 +412,48 @@ class ASys (FSM.StateMachine):
 																				})
 	
 	def note (self, bot, update, args):
-		if len(args) == 0:
-			self.on_event (BotAction.record, {"type": "note", "args": args})
-		elif (len(args) == 1):
-			if args[0].strip().lower() == 'all':
-				show_records (Notebook, args, All=True)
-			elif args[0].strip().lower() == 'tags':
-				self.switchwork (ASys.worknote)
-				show_tags    (Notebook)
+		if self.currentState is not ASys.void:
+			if len(args) == 0:
+				self.on_event (BotAction.record, {"type": "note", "args": args})
+			elif (len(args) == 1):
+				if args[0].strip().lower() == 'all':
+					show_records (Notebook, args, All=True)
+				elif args[0].strip().lower() == 'tags':
+					self.switchwork (ASys.worknote)
+					show_tags    (Notebook)
+				else:
+					show_records (Notebook, args, All=False)
 			else:
 				show_records (Notebook, args, All=False)
-		else:
-			show_records (Notebook, args, All=False)
 
 	def diary (self, bot, update, args):
-		if len(args) == 0:
-			self.on_event (BotAction.record, {"type": "diary", "args": args})	
-		elif (len(args) == 1):
-			if args[0].strip().lower() == 'all':
-				show_records (Diary, args, All=True)
-			elif args[0].strip().lower() == 'tags':
-				self.switchwork (ASys.workdiary)
-				show_tags    (Diary)
+		if self.currentState is not ASys.void:
+			if len(args) == 0:
+				self.on_event (BotAction.record, {"type": "diary", "args": args})	
+			elif (len(args) == 1):
+				if args[0].strip().lower() == 'all':
+					show_records (Diary, args, All=True)
+				elif args[0].strip().lower() == 'tags':
+					self.switchwork (ASys.workdiary)
+					show_tags    (Diary)
+				else:
+					show_records (Diary, args, All=False)
 			else:
 				show_records (Diary, args, All=False)
-		else:
-			show_records (Diary, args, All=False)
 
 	def end (self, bot, update, args):
-		self.current_tags.extend(map(lambda x: x.strip().lower(), args))
-		self.current_tags = list(set(self.current_tags))
-		self.on_event (BotAction.end, {'current_content': self.current_content, 'current_tags': self.current_tags})	
-		self.current_content = ''
-		self.current_tags    = []
+		if self.currentState is not ASys.void:
+			self.current_tags.extend(map(lambda x: x.strip().lower(), args))
+			self.current_tags = list(set(self.current_tags))
+			self.on_event (BotAction.end, {'current_content': self.current_content, 'current_tags': self.current_tags})	
+			self.current_content = ''
+			self.current_tags    = []
 
 	def cancel (self, bot, update):
-		self.on_event (BotAction.cancel, {})	
-		self.current_content = ''
-		self.current_tags    = []
+		if self.currentState is not ASys.void:
+			self.on_event (BotAction.cancel, {})	
+			self.current_content = ''
+			self.current_tags    = []
 	
 	def transition_disable_info(self):
 		BAI_bot.respond ('Please finish previous activity. All preemptive activities were abandoned.')

@@ -101,14 +101,17 @@ class Entry:
         else:
           ret_str += self.date_str (timestamp, "Edited in ", Markdown, ftime) + '\n'
         if (preview > 0) and (len(content) > char_quota):
-          ret_str += content [0:char_quota]
+          con_str = content [0:char_quota]
         else:
-          ret_str += content 
+          con_str = content 
+        if Markdown:
+          con_str = '```\n' + con_str + '\n```'
+        ret_str += con_str
         char_quota = char_quota - len(content)
       else:
         break
     if preview > 0:
-      end_str = 'click to timestamp to see more'
+      end_str = '...click to timestamp to see more'
       if Markdown:
         end_str = '_' + end_str + '_'
       ret_str += '\n' + end_str
