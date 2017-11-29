@@ -50,9 +50,14 @@ class NoteBook:
 					for stamp in recordlist:
 						f.write('\n'.join(['@[' + str(self.records[stamp]['timestamp']) + ']',
 															 ','.join(self.records[stamp]['tags']),
-															 '@[' + str(self.records[stamp]['timestamp']) + ']',
-															 '\t' + self.records[stamp]['content']]))
-						f.write('---oOo---' + '\n')
+															 '@[' + str(self.records[stamp]['timestamp']) + ']']))
+						texts = self.records[stamp]['content'].split('\n')
+						if texts[-1] == '':
+							del texts[-1]
+						for text in texts:
+							#print (text)
+							f.write('\n\t' + text)
+						f.write('\n---oOo---\n')
 					f.close()
 		self.changed_timetree.clear()
 
