@@ -84,7 +84,7 @@ class Entry:
     if tagslist [0] == 'untagged':
       return ''
     else:
-      ret_str = ','.join(tagslist)
+      ret_str = ', '.join(tagslist)
       if Markdown:
         ret_str = '*' + ret_str + '*'
       return ret_str
