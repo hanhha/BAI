@@ -43,12 +43,12 @@ class ABot:
 			raise error
 		except Unauthorized:
 			print ("Unauthorized") 
-		except BadRequest:
-			print ("Malformed requests")
+		#except BadRequest:
+		#	print ("Malformed requests")
 		except TimedOut:
 			print ("Slow connection")
-		except NetworkError:
-			print ("Network error")
+		#except NetworkError:
+		#	print ("Network error")
 		except ChatMigrate as e:
 			print ("Chat ID of group has changed") 
 		except TelegramError:
@@ -128,7 +128,7 @@ class Void (FSM.State):
 	def __init__ (self):
 		FSM.State.__init__ (self, "Void")
 	def run(self, input, args):
-		print (self)
+		pass
 	def next(self, input, args):
 		if input == BotAction.initialize:
 			return ASys.init
@@ -138,7 +138,7 @@ class Init (FSM.State):
 	def __init__ (self):
 		FSM.State.__init__ (self, "Init")
 	def run(self, input, args):
-		print (self)
+		#print (self)
 		BAI_bot.initialize (args["bot"], args["update"])
 		BAI_bot.greeting ()
 		BAI_bot.respond ("I'm here to serve you")
@@ -162,7 +162,7 @@ class Idle (FSM.State):
 	def __init__ (self):
 		FSM.State.__init__ (self, "Idle")
 	def run(self, input, args):
-		print (self)
+		pass
 	def next(self, input, args):
 		if input == BotAction.record:
 			if args['type'] == 'note':
@@ -183,20 +183,20 @@ class WorkNote (FSM.State):
 	def __init__ (self):
 		FSM.State.__init__ (self, "WorkNote")
 	def run(self, input, args):
-		print ("WorkNote")
+		pass
 	def next(self, input, args):
 		if input == BotAction.record:
 			BAI_bot.respond ("I'm recording.")
 		if input == BotAction.end:
 			if len(args['current_content']) != 0:
-				record = NoteTake.NoteBook.shape_record (args['current_content'], args['current_tags'])
+				record = NoteTake.Entry(NoteTake.Entry.shape_record (args['current_content'], args['current_tags']))
 				Notebook.new_record (record)
 				Notebook.store_notebook ()
-				PA_sys.note_read_hndl[record['timestamp']] = CmdHndl (str(record['timestamp']), 
+				PA_sys.note_read_hndl[record.timestamp] = CmdHndl (str(record.timestamp), 
 																															lambda bot, 
-																															update, arg = record['timestamp'],
+																															update, arg = record.timestamp,
 																															book = Notebook: show_record (book, arg))
-				BAI_bot.add_handler (PA_sys.note_read_hndl [record['timestamp']])
+				BAI_bot.add_handler (PA_sys.note_read_hndl [record.timestamp])
 				BAI_bot.respond ("Your note has been saved.")
 			else:
 				BAI_bot.respond ("Nothing to record.")
@@ -210,21 +210,21 @@ class WorkDiary (FSM.State):
 	def __init__ (self):
 		FSM.State.__init__ (self, "WorkDiary")
 	def run(self, input, args):
-		print ("WorkDiary")
+		pass
 	def next(self, input, args):
 		if input == BotAction.record:
 			BAI_bot.respond ("I'm recording.")
 		if input == BotAction.end:
 			if len(args['current_content']) != 0:
-				record = NoteTake.NoteBook.shape_record (args['current_content'], args['current_tags'])
+				record = NoteTake.Entry(NoteTake.Entry.shape_record (args['current_content'], args['current_tags']))
 				Diary.new_record (record)
 				Diary.store_notebook ()
-				PA_sys.diary_read_hndl[record['timestamp']] = CmdHndl (str(record['timestamp']), 
+				PA_sys.diary_read_hndl[record.timestamp] = CmdHndl (str(record.timestamp), 
 																															 lambda bot,
 																															 update, arg =
-																															 record['timestamp'],
+																															 record.timestamp,
 																															 book = Diary: show_record (book, arg))
-				BAI_bot.add_handler (PA_sys.diary_read_hndl [record['timestamp']])
+				BAI_bot.add_handler (PA_sys.diary_read_hndl [record.timestamp])
 				BAI_bot.respond ("Your entry has been saved.")
 			else:
 				BAI_bot.respond ("Nothing to record.")
@@ -310,7 +310,7 @@ def show_records (book, tags = [], All = False, timestr = 'Anytime'):
 options = Utils.InlineOptions ("Tags")
 
 def preview_tags (tagscloud):
-	print (tagscloud)
+	#print (tagscloud)
 	option_list = []
 	callback_list = []
 	for k, v in sorted(tagscloud.items(), key = lambda t: t[1], reverse = True):
@@ -344,25 +344,14 @@ def select (bot, update):
 def preview_records (book, records_stamplist):
 	for stamp in records_stamplist:
 		record = book.records [stamp]
-		msg = '/' + str(record['timestamp']) + '\n'
-		msg += ','.join(record['tags']) + '\n'
-		if len(record['content']) < 50:
-			msg += record['content']
-		else:
-			msg += record['content'][0:50]
-		BAI_bot.respond (msg)
+		BAI_bot.respond ('/' + str(stamp) + '\n' + record.to_str(Markdown = True, ftime = localtime, preview = 25), parse_mode = 'Markdown')
 	BAI_bot.respond ("That's all.")
 	
 def record2str (book, timestamp):
-	record_time, tags, content = NoteTake.NoteBook.unshape_record (book.records[timestamp])
-	msg = ''
-	msg += strftime('%Y-%m-%d %H:%M:%S', localtime(record_time)) + '\n'
-	msg += ', '.join(tags) + '\n'
-	msg += content
-	return msg
+	return book.records[timestamp].to_str(Markdown = True, ftime = localtime) 
 
 def show_record (book, timestamp):
-	BAI_bot.respond (record2str(book, timestamp))
+	BAI_bot.respond (record2str(book, timestamp), parse_mode = 'Markdown')
 
 
 class ASys (FSM.StateMachine):
