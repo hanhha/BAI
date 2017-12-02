@@ -17,6 +17,8 @@ class Entry:
     timestamp is epoch time
     """
     self.record = copy.deepcopy (record)
+    self.plain_textlist =  ''
+    self.md_textlist = []
 
   def add (self, content, tags = [], replace_tag = False):
     if replace_tag:
@@ -73,50 +75,105 @@ class Entry:
     return self.record ['content']
 
   @staticmethod
-  def date_str (timestamp, prefix, Markdown, ftime):
-    ret_str = prefix + strftime ('%Y-%m-%d %H:%M:%S', ftime (timestamp))
-    if Markdown:
-      ret_str = '_' + ret_str + '_'
+  def date_str (timestamp, prefix, ftime):
+    ret_str = []
+    ret_str.append(prefix + strftime ('%Y-%m-%d %H:%M:%S', ftime (timestamp)))
+    ret_str.append('_' + ret_str [0] + '_')
     return ret_str
 
   @staticmethod
-  def tags_str (tagslist, Markdown):
+  def tags_str (tagslist):
     if tagslist [0] == 'untagged':
-      return ''
+      return ['','']
     else:
       ret_str = ', '.join(tagslist)
-      if Markdown:
-        ret_str = '*' + ret_str + '*'
-      return ret_str
-
-  def to_str (self, Markdown = False, ftime = gmtime, preview = 0):
-    ret_str = "" 
-    ret_str += self.tags_str (self.record ['tags'], Markdown)
-    char_quota = preview
-    for timestamp, content in sorted (self.record['content'].items(), key = lambda t: t[0], reverse = False):
-      if (preview == 0) or (preview > 0 and char_quota > 0):
-        ret_str += '\n'
-        if timestamp == self.record ['timestamp']:
-          ret_str += self.date_str (timestamp, "Created in ", Markdown, ftime) + '\n'
-        else:
-          ret_str += self.date_str (timestamp, "Edited in ", Markdown, ftime) + '\n'
-        if (preview > 0) and (len(content) > char_quota):
-          con_str = content [0:char_quota]
-        else:
-          con_str = content 
-        if Markdown:
-          con_str = '```\n' + con_str + '\n```'
-        ret_str += con_str
-        char_quota = char_quota - len(content)
+      return [ret_str, '*' + ret_str + '*']
+  
+  @staticmethod
+  def split_content (timestamp, content, prefix, framesize, ftime = gmtime):
+    ret_list = []
+    md_ret_list = []
+    ret_str = ''
+    md_ret_str = ''
+    [ret_str, md_ret_str] = Entry.date_str (timestamp, prefix, ftime)
+    text = content
+    quota = framesize - len(ret_str)
+    if quota <= 0:
+      ret_list.append (ret_str)
+      md_ret_list.append (md_ret_str)
+      (ret_str, md_ret_str) = ('','')
+    else:
+      if quota >= len(text):
+        ret_str += '\n' + text
+        md_ret_str += '\n' + '```\n' + text + '\n```'
+        #print (ret_str)
+        #print (md_ret_str)
+        return [[ret_str], [md_ret_str]]
       else:
-        break
-    if preview > 0:
-      end_str = '...click to timestamp to see more'
-      if Markdown:
-        end_str = '_' + end_str + '_'
-      ret_str += '\n' + end_str
-    #print (ret_str)
-    return ret_str
+        tmp_str = text [0:quota-1]
+        text = text [quota:]
+        ret_str += '\n' + tmp_str
+        md_ret_str += '\n' + '```\n' + tmp_str + '\n```'
+        ret_list.append (ret_str)
+        md_ret_list.append (md_ret_str)
+        (ret_str, md_ret_str) = ('','')
+    
+    #print ("split")
+    #print (text)
+    chunks = len(text)
+    for i in range (0, chunks, framesize):
+      text_list = text[i:i+framesize] 
+      md_text_list = '```\n' + text[i:i+framesize] + '\n```' 
+
+    ret_list.extend (text_list)
+    md_ret_list.extend (md_text_list)
+    #print ("Split")
+    #print (ret_list)
+    #print (md_ret_list)
+    return [ret_list, md_ret_list]
+    
+  def to_str (self, Markdown = False, ftime = gmtime, joined = False):
+    tlist = []
+    if not Markdown and len(self.plain_textlist) > 0:
+      tlist = self.plain_textlist
+    if Markdown and len(self.md_textlist) > 0:
+      tlist = self.md_textlist
+    if len(tlist) > 0:
+      if joined:
+        return '\n'.join(tlist)
+      else:
+        return tlist
+    else:
+      ret_list = []
+      md_ret_list = []
+      ret_str = ''
+      md_ret_str = ''
+      [ret_str, md_ret_str] = self.tags_str (self.record ['tags'])
+
+      for timestamp, content in sorted (self.record['content'].items(), key = lambda t: t[0], reverse = False):
+        if timestamp == self.record ['timestamp']:
+          [tmp_list, md_tmp_list] = self.split_content (timestamp, content, "Created in ", 3000, ftime) 
+        else:
+          [tmp_list, md_tmp_list] = self.split_content (timestamp, content, "Edited in ", 3000, ftime) 
+        ret_list.extend(tmp_list.copy())
+        md_ret_list.extend(md_tmp_list.copy())
+      ret_list [0] = ret_str + '\n' + ret_list [0]
+      md_ret_list [0] = md_ret_str + '\n' + md_ret_list [0]
+
+      self.plain_textlist = ret_list.copy()
+      self.md_textlist = md_ret_list.copy()
+
+      tlist = []
+      if not Markdown:
+        tlist = self.plain_textlist
+      else:
+        tlist = self.md_textlist
+      #print  ("to_str")
+      #print(tlist)
+      if joined:
+        return '\n'.join(tlist)
+      else:
+        return tlist
 
   @staticmethod
   def shape_record (content, tags):

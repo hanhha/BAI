@@ -1,4 +1,5 @@
 import lxml.html 
+from .Cache import Cache
 
 def lookup (word):
     pron, desc, rela = '', '', [] 
@@ -17,3 +18,10 @@ def lookup (word):
 
     return pron, desc, rela
 
+class EV_dict_cache (Cache):
+	def __init__ (self):
+		Cache.__init__(self, "EV_dict_cache", 10)
+	
+	def fetch (self, tag):
+		pron, desc, rela = lookup (tag)
+		return pron + desc + ''.join(rela)

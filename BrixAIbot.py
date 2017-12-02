@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from telegram.ext import (Updater, Filters)
+from telegram.ext import (Updater, Filters, BaseFilter)
 from telegram.ext import (CommandHandler as CmdHndl, MessageHandler as MsgHndl, CallbackQueryHandler as CbQHndl)
 from telegram.error import (TelegramError, Unauthorized, BadRequest, TimedOut, ChatMigrated, NetworkError)
 from telegram import constants
@@ -40,7 +40,7 @@ class ABot:
 
 	def error_cb (self, bot, update, error):
 		try:
-			raise error
+		 raise error
 		except Unauthorized:
 			print ("Unauthorized") 
 		except BadRequest:
@@ -54,34 +54,29 @@ class ABot:
 		except TelegramError:
 			print ("Internal Telegram error")
 
-	def respond (self, texts, short = False, **kwargs):
-		chunk_size = 1000 # 1000 chars
-		short_chunk= 50
+	def is_allowed (bot, update):
+		if update.message.chat_id != self.act_chat_id:
+			bot.send_message (update.message.chat_id, text = "I don't know you. You're harrasing.")
+			return False
+		else:
+			return True
+
+	def respond (self, texts, **kwargs):
+		"""
+		In case of Markdown or HTML, the split feature would cause error due to no matching parentheses.
+		So that feature is abandoned if Markdown or HTML exists
+		"""
 		if type(texts) is list:
 			for idx, text in enumerate(texts):
-				if short:
-					text = text [:short_chunk]
-				if len(text) > chunk_size:
-					chunks = len(text)
-					text_chunks = [text[i:i+chunk_size] for i in range(0, chunks, chunk_size)]
-					self.respond (text_chunks, short = short, **kwargs)
-				else:
-					#print (text)
 					self.act_bot.send_message (self.act_chat_id, text = text, **kwargs)
 		else:
-			if short:
-				texts = texts [:short_chunk]
-			if len(texts) > chunk_size:
-				chunks = len(text)
-				text_chunks = [text[i:i+chunk_size] for i in range(0, chunks, chunk_size)]
-				self.respond (text_chunks, short = short, **kwargs)
-			else:
-				#print (texts)
-				self.act_bot.send_message (self.act_chat_id, text = texts, **kwargs)
+			self.act_bot.send_message (self.act_chat_id, text = texts, **kwargs)
 
 	def initialize (self, bot, update):
-		self.act_chat_id = update.message.chat_id
+		#self.act_chat_id = update.message.chat_id
 		self.act_bot     = bot
+		#print (self.act_chat_id)
+		#print (update.message)
 	
 	def greeting (self):
 		h = datetime.now().time().hour
@@ -104,17 +99,31 @@ class ABot:
 	def add_handler (self, hndl):
 		self.dispatcher.add_handler (hndl)
 
+	def remove_handler (self, hndl):
+		self.dispatcher.remove_handler (hndl)
+
 	def __init__ (self, name = "BAI"):
 		self.act_name = name 
 		config = CfgPsr.ConfigParser ()
 		config.read (self.config_filename)
 		self.updater    = Updater(token=config['telegram']['token'])
+		self.act_chat_id    = int(config['telegram']['chat_id'])
 		self.dispatcher = self.updater.dispatcher
 
 		self.dispatcher.add_error_handler (self.error_cb)
 		logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 BAI_bot               = ABot (args.botname)
+
+class FilterMe (BaseFilter):
+	def filter (self, message):
+		#print (message)
+		if message.chat_id != BAI_bot.act_chat_id:
+			return False
+		else:
+			return True
+
+filterme = FilterMe()
 
 class BotAction (FSM.Action):
 	def __init__ (self, action):
@@ -197,7 +206,7 @@ class WorkNote (FSM.State):
 				PA_sys.note_read_hndl[record.timestamp] = CmdHndl (str(record.timestamp), 
 																															lambda bot, 
 																															update, arg = record.timestamp,
-																															book = Notebook: show_record (book, arg))
+																															book = Notebook: show_record (book, arg), filters = filterme)
 				BAI_bot.add_handler (PA_sys.note_read_hndl [record.timestamp])
 				BAI_bot.respond ("Your note has been saved.")
 			else:
@@ -225,7 +234,7 @@ class WorkDiary (FSM.State):
 																															 lambda bot,
 																															 update, arg =
 																															 record.timestamp,
-																															 book = Diary: show_record (book, arg))
+																															 book = Diary: show_record (book, arg), filters = filterme)
 				BAI_bot.add_handler (PA_sys.diary_read_hndl [record.timestamp])
 				BAI_bot.respond ("Your entry has been saved.")
 			else:
@@ -265,24 +274,24 @@ def check_plate (bot, update, args):
 					send_str.append('No moving violation')
 		BAI_bot.respond (send_str)
 
-def lookup (args):
+ev_dict = DictLookup.EV_dict_cache ()
+wordlist = {}
+
+def lookup (bot, update, args):
 	if PA_sys.currentState is not ASys.void:
 		send_str = []
 		if len(args) == 0:
 			send_str = ['Maybe next time.']
 		else:
+			for k,v in wordlist.items():
+				BAI_bot.remove_handler (v)
+			wordlist.clear()
 			for word in args:
-				pron, desc, rela = DictLookup.lookup (word.strip().lower())
-				send_str.append (word + '\n' + pron +  desc + ''.join(rela))
-		return send_str
+				send_str.append ('/' + word + '\n' + ev_dict.read (word) [0] [0:99])
+				wordlist [word] = CmdHndl (word, lambda bot, update, arg = word: BAI_bot.respond (ev_dict.read (arg)), filters = filterme)
+				BAI_bot.add_handler (wordlist [word])
 
-def short_lookup (bot, update, args):
-	if PA_sys.currentState is not ASys.void:
-		BAI_bot.respond( lookup (args), short = True)
-
-def detail_lookup (bot, update, args):
-	if PA_sys.currentState is not ASys.void:
-		BAI_bot.respond( lookup (args), short = False)
+	BAI_bot.respond (send_str)
 
 def process_msg (bot, update):
 	if PA_sys.currentState is not ASys.void:
@@ -352,15 +361,16 @@ def select (bot, update):
 def preview_records (book, records_stamplist):
 	for stamp in records_stamplist:
 		record = book.records [stamp]
-		BAI_bot.respond ('/' + str(stamp) + '\n' + record.to_str(Markdown = True, ftime = localtime, preview = 25), parse_mode = 'Markdown')
+		preview_str = record.to_str(Markdown = False, ftime = localtime, joined = True) [0:99]	
+		BAI_bot.respond ('/' + str(stamp) + '\n' + preview_str)
 	BAI_bot.respond ("That's all.")
 	
 def record2str (book, timestamp):
 	return book.records[timestamp].to_str(Markdown = True, ftime = localtime) 
 
 def show_record (book, timestamp):
-	BAI_bot.respond (record2str(book, timestamp), parse_mode = 'Markdown')
-
+	record_content = book.records[timestamp].to_str(Markdown = True, ftime = localtime)
+	BAI_bot.respond (record_content, parse_mode = 'Markdown')
 
 class ASys (FSM.StateMachine):
 	def __init__(self):
@@ -369,16 +379,15 @@ class ASys (FSM.StateMachine):
 		FSM.StateMachine.__init__(self, ASys.void)
 		
 		# Adding handlers
-		cmd_start_hndl        = CmdHndl ('start', self.initialize_bot)
-		cmd_note_hndl         = CmdHndl ('note', self.note, pass_args = True)
-		cmd_diary_hndl        = CmdHndl ('diary', self.diary, pass_args = True)
-		cmd_end_hndl          = CmdHndl ('end', self.end, pass_args = True)
-		cmd_cancel_hndl       = CmdHndl ('cancel', self.cancel)
-		cmd_checkPlate_hndl   = CmdHndl ('check_plate', check_plate, pass_args = True)
-		cmd_slookup_hndl      = CmdHndl ('lookup', short_lookup, pass_args = True)
-		cmd_llookup_hndl      = CmdHndl ('detail_lookup', detail_lookup, pass_args = True)
+		cmd_start_hndl        = CmdHndl ('start', self.initialize_bot, filters = filterme)
+		cmd_note_hndl         = CmdHndl ('note', self.note, pass_args = True, filters = filterme)
+		cmd_diary_hndl        = CmdHndl ('diary', self.diary, pass_args = True, filters = filterme)
+		cmd_end_hndl          = CmdHndl ('end', self.end, pass_args = True, filters = filterme)
+		cmd_cancel_hndl       = CmdHndl ('cancel', self.cancel, filters = filterme)
+		cmd_checkPlate_hndl   = CmdHndl ('check_plate', check_plate, pass_args = True, filters = filterme)
+		cmd_lookup_hndl       = CmdHndl ('lookup', lookup, pass_args = True, filters = filterme)
 		query_select_hndl     = CbQHndl (select)
-		msg_hndl              = MsgHndl (Filters.text, process_msg)
+		msg_hndl              = MsgHndl (Filters.text & filterme, process_msg)
 		
 		BAI_bot.add_handler (cmd_start_hndl)
 		BAI_bot.add_handler (cmd_note_hndl)
@@ -386,21 +395,20 @@ class ASys (FSM.StateMachine):
 		BAI_bot.add_handler (cmd_end_hndl)
 		BAI_bot.add_handler (cmd_cancel_hndl)
 		BAI_bot.add_handler (cmd_checkPlate_hndl)
-		BAI_bot.add_handler (cmd_slookup_hndl)
-		BAI_bot.add_handler (cmd_llookup_hndl)
+		BAI_bot.add_handler (cmd_lookup_hndl)
 		BAI_bot.add_handler (query_select_hndl)
 		BAI_bot.add_handler (msg_hndl)
 
 		self.note_read_hndl = {}
 		for timestamp, record in Notebook.records.items():
 			self.note_read_hndl [timestamp] = CmdHndl (str(timestamp), lambda bot, update,
-					arg = timestamp, book = Notebook: show_record (book, arg))
+					arg = timestamp, book = Notebook: show_record (book, arg), filters = filterme)
 			BAI_bot.add_handler (self.note_read_hndl [timestamp])
 
 		self.diary_read_hndl = {}
 		for timestamp, record in Diary.records.items():
 			self.diary_read_hndl [timestamp] = CmdHndl (str(timestamp), lambda bot, update,
-					arg = timestamp, book = Diary: show_record (book, arg))
+					arg = timestamp, book = Diary: show_record (book, arg), filters = filterme)
 			BAI_bot.add_handler (self.diary_read_hndl [timestamp])
 	
 	def live (self):
