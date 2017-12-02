@@ -320,7 +320,7 @@ class NoteBook:
                     self.timetree[year][month][mday] = self.changed_timetree[year][month][mday].copy() 
             else:
                 self.timetree[year][month] = {mday : self.changed_timetree[year][month][mday].copy()} 
-                os.makedir (path)
+                os.mkdir (path)
           else:
             self.timetree[year] = {month : {mday : self.changed_timetree[year][month][mday].copy()}} 
             os.makedirs (path)

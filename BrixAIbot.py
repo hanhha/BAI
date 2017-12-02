@@ -362,6 +362,7 @@ def preview_records (book, records_stamplist):
 	for stamp in records_stamplist:
 		record = book.records [stamp]
 		preview_str = record.to_str(Markdown = False, ftime = localtime, joined = True) [0:99]	
+		preview_str += '\n...click to /' + str(stamp) + ' for full note...'
 		BAI_bot.respond ('/' + str(stamp) + '\n' + preview_str)
 	BAI_bot.respond ("That's all.")
 	
