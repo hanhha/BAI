@@ -25,7 +25,7 @@ parser.add_argument ('-b', '--botname', type=str, help = 'name of bot')
 parser.add_argument ('-c', '--config', type=str, help = 'path to config file that stores api token of the bog')
 args = parser.parse_args()
 
-Notebook = NoteTake.NoteBook (args.notebook, args.path)
+Notebook = NoteTake.NoteBook (args.notebook, args.path, editable = True)
 Diary    = NoteTake.NoteBook (args.diary, args.path)
 
 class ABot:
@@ -157,13 +157,16 @@ class Init (FSM.State):
 		if input == BotAction.record:
 			if args['type'] == 'note':
 				BAI_bot.respond ("Recording note. You can save it by /end with tags separated by comma.")
-				return ASys.worknote
+				if 'timestamp' in args.keys():
+					return ASys.workeditnote
+				else:
+					return ASys.worknewnote
 			elif args['type'] == 'diary':
 				BAI_bot.respond ("Recording diary. You can save it by /end with tags separated by comma.")
 				return ASys.workdiary
 		elif input == BotAction.tempswitchwork:
 			if args['type'] == 'note':
-				return ASys.worknote
+				return ASys.worknewnote
 			elif args['type'] == 'diary':
 				return ASys.workdiary
 		BAI_bot.respond ("Very sorry, I don't have this function right now")
@@ -178,21 +181,24 @@ class Idle (FSM.State):
 		if input == BotAction.record:
 			if args['type'] == 'note':
 				BAI_bot.respond ("Recording note. You can save it by /end with tags separated by comma.")
-				return ASys.worknote
+				if 'timestamp' in args.keys():
+					return ASys.workeditnote
+				else:
+					return ASys.worknewnote
 			elif args['type'] == 'diary':
 				BAI_bot.respond ("Recording diary. You can save it by /end with tags separated by comma.")
 				return ASys.workdiary
 		elif input == BotAction.tempswitchwork:
 			if args['type'] == 'note':
-				return ASys.worknote
+				return ASys.worknewnote
 			elif args['type'] == 'diary':
 				return ASys.workdiary
 		BAI_bot.respond ("Very sorry, I don't have this function right now")
 		return self
 
-class WorkNote (FSM.State):
+class WorkNewNote (FSM.State):
 	def __init__ (self):
-		FSM.State.__init__ (self, "WorkNote")
+		FSM.State.__init__ (self, "WorkNewNote")
 	def run(self, input, args):
 		pass
 	def next(self, input, args):
@@ -203,6 +209,34 @@ class WorkNote (FSM.State):
 				record = NoteTake.Entry(NoteTake.Entry.shape_record (args['current_content'], args['current_tags']))
 				Notebook.new_record (record)
 				Notebook.store_notebook ()
+				PA_sys.note_read_hndl[record.timestamp] = CmdHndl (str(record.timestamp), 
+																															lambda bot, 
+																															update, arg = record.timestamp,
+																															book = Notebook: show_record (book, arg), filters = filterme)
+				BAI_bot.add_handler (PA_sys.note_read_hndl [record.timestamp])
+				BAI_bot.respond ("Your note has been saved.")
+			else:
+				BAI_bot.respond ("Nothing to record.")
+			return ASys.idle
+		elif input == BotAction.cancel:
+			BAI_bot.respond ("Canceled")
+			return ASys.idle
+		return self
+
+class WorkEditNote (FSM.State):
+	def __init__ (self):
+		FSM.State.__init__ (self, "WorkEditNote")
+	def run(self, input, args):
+		if 'timestamp' in args.keys():
+			self.timestamp_note = args ['timestamp']
+	def next(self, input, args):
+		if input == BotAction.record:
+			BAI_bot.respond ("I'm recording.")
+		if input == BotAction.end:
+			if len(args['current_content']) != 0:
+				Notebook.append_record ({'content':args['current_content'], 'tags':args['current_tags']}, self.timestamp_note)
+				Notebook.store_notebook ()
+				record = Notebook.records [self.timestamp_note]
 				PA_sys.note_read_hndl[record.timestamp] = CmdHndl (str(record.timestamp), 
 																															lambda bot, 
 																															update, arg = record.timestamp,
@@ -298,7 +332,7 @@ def process_msg (bot, update):
 		tag_re = re.compile(r"(\w+),,,")
 
 		msg = update.message.text
-		if (PA_sys.currentState == ASys.worknote) or (PA_sys.currentState == ASys.workdiary):
+		if (PA_sys.currentState == ASys.worknewnote) or (PA_sys.currentState == ASys.workeditnote) or (PA_sys.currentState == ASys.workdiary):
 			PA_sys.current_tags.extend(map (lambda x: x.strip().lower(), tag_re.findall(msg)))
 			PA_sys.current_tags = list(set(PA_sys.current_tags)) 
 			if PA_sys.current_content == '':
@@ -343,7 +377,7 @@ def select (bot, update):
 		if options.SelectDone:
 			bot.edit_message_text(text='Selected tags: ' + select_str,
 					chat_id=query.message.chat_id, message_id=query.message.message_id)
-			if PA_sys.currentState == ASys.worknote:
+			if PA_sys.currentState == ASys.worknewnote or PA_sys.currentState == ASys.workeditnote:
 				book = Notebook
 			elif PA_sys.currentState == ASys.workdiary:
 				book = Diary
@@ -428,8 +462,10 @@ class ASys (FSM.StateMachine):
 				if args[0].strip().lower() == 'all':
 					show_records (Notebook, args, All=True)
 				elif args[0].strip().lower() == 'tags':
-					self.switchwork (ASys.worknote)
+					self.switchwork (ASys.worknewnote)
 					show_tags    (Notebook)
+				elif int(args[0]) in Notebook.records.keys():
+					self.on_event (BotAction.record, {"type": "note", "timestamp" : int(args[0]), "args": args})
 				else:
 					show_records (Notebook, args, All=False)
 			else:
@@ -470,8 +506,9 @@ class ASys (FSM.StateMachine):
 ASys.void           = Void ()
 ASys.init           = Init ()
 ASys.idle           = Idle ()
-ASys.worknote    = WorkNote ()
-ASys.workdiary   = WorkDiary ()
+ASys.worknewnote    = WorkNewNote ()
+ASys.workeditnote   = WorkEditNote ()
+ASys.workdiary      = WorkDiary ()
 
 PA_sys                = ASys ()
 

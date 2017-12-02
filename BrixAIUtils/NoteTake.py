@@ -37,7 +37,7 @@ class Entry:
       else:
         if self.record ['tags'][0] == 'untagged':
           self.record['tags'].clear()
-        self.record['tags'].extend(tags.copy)
+        self.record['tags'].extend(tags.copy())
     else:
       self.record['tags'].append(tags)
 
@@ -197,7 +197,6 @@ class Entry:
     else:
       return record['timestamp'], record['tags'], record['content']
 
-
 class NoteBook:
   def __init__(self, name, rootdir, editable=False):
     self.records  = {} 
@@ -214,37 +213,34 @@ class NoteBook:
         self.fetch_notebook()
     
   def new_record (self, record):
-      inttime = record.timestamp
-      self.records [inttime] = copy.deepcopy(record)
-      tags = record.tags
-      for tag in tags:
-          if tag in self.tags:
-              self.tags[tag].append (inttime)
-          else:
-              self.tags[tag] = [inttime]
-      year  = str(gmtime(inttime).tm_year)
-      month = str(gmtime(inttime).tm_mon)
-      mday  = str(gmtime(inttime).tm_mday)
-      if year in self.changed_timetree:
-          if month in self.changed_timetree[year]:
-              if mday in self.changed_timetree[year][month]:
-                  self.changed_timetree[year][month][mday].append(inttime)
-              else:
-                  self.changed_timetree[year][month][mday] = [inttime]
-          else:
-              self.changed_timetree[year][month] = {mday : [inttime]}
+    inttime = record.timestamp
+    self.records [inttime] = copy.deepcopy(record)
+    tags = record.tags
+    for tag in tags:
+      if tag in self.tags:
+        self.tags[tag].append (inttime)
       else:
-          self.changed_timetree[year] = {month : {mday : [inttime]}}
+        self.tags[tag] = [inttime]
+    year  = str(gmtime(inttime).tm_year)
+    month = str(gmtime(inttime).tm_mon)
+    mday  = str(gmtime(inttime).tm_mday)
+    if year in self.changed_timetree:
+      if month in self.changed_timetree[year]:
+        if mday in self.changed_timetree[year][month]:
+          self.changed_timetree[year][month][mday].append(inttime)
+        else:
+          self.changed_timetree[year][month][mday] = [inttime]
+      else:
+        self.changed_timetree[year][month] = {mday : [inttime]}
+    else:
+      self.changed_timetree[year] = {month : {mday : [inttime]}}
 
-  def replace_record (self, old_record, new_record):
+  def append_record (self, extra_record_dict, inttime):
     """
     in this case, timestamp is existed in timetree
     The existed one will be removed from timetree and all linked structures, and new one will be added to changed_timetree
     """
     if self.editable:
-      assert old_record.timestamp == new_record.timestamp
-      inttime    = old_record.timestamp
-
       # Move from timetree to changed_timetree
       year  = str(gmtime(inttime).tm_year)
       month = str(gmtime(inttime).tm_mon)
@@ -256,10 +252,11 @@ class NoteBook:
       if len(self.timetree[year]) == 0:
         del self.timetree[year]
 
-      # Delete old tags and add new tags
-      for tag in old_record.tags:
-        self.tags['tag'].remove(inttime)
-      tags = new_record.tags
+      #print (self.changed_timetree)
+      #print (self.timetree)
+
+      # Add new tags
+      tags = extra_record_dict['tags']
       for tag in tags:
           if tag in self.tags:
               self.tags[tag].append (inttime)
@@ -267,7 +264,7 @@ class NoteBook:
               self.tags[tag] = [inttime]
       
       # Change in records
-      self.records [inttime] = copy.deepcopy (new_record)
+      self.records[inttime].add(extra_record_dict['content'], extra_record_dict['tags'])
 
       # Delete file for that day
       os.remove (os.path.join(self.notebookpath, year, month, mday + ".txt"))
@@ -281,6 +278,48 @@ class NoteBook:
         pass
     else:
       pass
+
+  def pop_record (self, timestamp):
+    """
+    in this case, timestamp is existed in timetree
+    The existed one will be removed from timetree and all linked structures
+    """
+    if self.editable:
+      inttime    = timestamp
+
+      # Move from timetree to changed_timetree
+      year  = str(gmtime(inttime).tm_year)
+      month = str(gmtime(inttime).tm_mon)
+      mday  = str(gmtime(inttime).tm_mday)
+      self.changed_timetree [year] = {month : {mday : copy.deepcopy(self.timetree [year][month][mday])}}
+      del self.timetree[year][month][mday]
+      if len(self.timetree[year][month]) == 0:
+        del self.timetree[year][month]
+      if len(self.timetree[year]) == 0:
+        del self.timetree[year]
+      # Delete record in changed_timetree
+      del self.changed_timetree [year][month][day][inttime]
+
+      # Delete in records
+      ret_record = self.records.pop(inttime)
+
+      # Delete from tags list
+      for tag in ret_record.tags:
+        self.tags['tag'].remove(inttime)
+      
+      # Delete file for that day
+      os.remove (os.path.join(self.notebookpath, year, month, mday + ".txt"))
+      try:
+        os.rmdir  (os.path.join(self.notebookpath, year, month))
+      except OSError:
+        pass
+      try:
+        os.rmdir  (os.path.join(self.notebookpath, year))
+      except OSError:
+        pass
+      return ret_record
+    else:
+      return None
 
   def query_tags (self):
       tagscloud = {}
@@ -329,7 +368,7 @@ class NoteBook:
           for stamp in recordstamplist:
             f.write ('\n'.join(['@[' + str(self.records[stamp].timestamp) + ']',
                                                    ','.join(self.records[stamp].tags)]))
-            for edited_timestamp, content in self.records[stamp].content.items():
+            for edited_timestamp, content in sorted (self.records[stamp].content.items(), key = lambda t: t[0], reverse = False):
               f.write('\n' + '@[' + str(edited_timestamp) + ']')
               for contentline in content.split('\n'):
                 f.write('\n' + '\t' + contentline)
