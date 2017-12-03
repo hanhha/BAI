@@ -17,7 +17,7 @@ class Entry:
     timestamp is epoch time
     """
     self.record = copy.deepcopy (record)
-    self.plain_textlist =  ''
+    self.plain_textlist = [] 
     self.md_textlist = []
 
   def add (self, content, tags = [], replace_tag = False):
@@ -29,6 +29,9 @@ class Entry:
     if self.record ['timestamp'] == 0 :
       self.record ['timestamp'] = inttime
     self.record ['content'] [inttime] = content
+		# Flush cached representation strings
+    self.plain_textlist = [] 
+    self.md_textlist = []
 
   def add_tags (self, tags):
     if type(tags) is list:
