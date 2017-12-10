@@ -19,7 +19,7 @@ class StateMachine:
 		self.state_transition_en = True
 
 	# Template method
-	def switchwork (self, tempState):
+	def fastswitch (self, tempState):
 		self._prvState = self._currentState
 		self._currentState = tempState
 		self.state_transition_en = False

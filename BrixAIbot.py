@@ -11,11 +11,12 @@ import configparser as CfgPsr
 from datetime import datetime
 from time import (localtime, strftime)
 
-from BrixAIUtils import (VehicleCheck, FSM, NoteTake, DictLookup, Utils)
+from BrixAIUtils import (VehicleCheck, FSM, NoteTake, DictLookup, InlineOptions, InlineCalendar)
 
 import re, operator
 from argparse import ArgumentParser
 from functools import reduce
+import random, string
 
 parser = ArgumentParser()
 parser.add_argument ('-p', '--path', type=str, help = 'path of root dir of notebook')
@@ -39,20 +40,20 @@ class ABot:
 	dispatcher  = None
 
 	def error_cb (self, bot, update, error):
-		try:
+#		try:
 		 raise error
-		except Unauthorized:
-			print ("Unauthorized") 
-		except BadRequest:
-			print ("Malformed requests")
-		except TimedOut:
-			print ("Slow connection")
-		except NetworkError:
-			print ("Network error")
-		except ChatMigrate as e:
-			print ("Chat ID of group has changed") 
-		except TelegramError:
-			print ("Internal Telegram error")
+#		except Unauthorized:
+#			print ("Unauthorized") 
+#		except BadRequest:
+#			print ("Malformed requests")
+#		except TimedOut:
+#			print ("Slow connection")
+#		except NetworkError:
+#			print ("Network error")
+#		except ChatMigrate as e:
+#			print ("Chat ID of group has changed") 
+#		except TelegramError:
+#			print ("Internal Telegram error")
 
 	def is_allowed (bot, update):
 		if update.message.chat_id != self.act_chat_id:
@@ -131,7 +132,7 @@ class BotAction (FSM.Action):
 
 BotAction.initialize     = BotAction ("initialize")
 BotAction.record         = BotAction ("record")
-BotAction.tempswitchwork = BotAction ("tempswitchwork")
+BotAction.tempfastswitch = BotAction ("tempfastswitch")
 BotAction.end            = BotAction ("end")
 BotAction.cancel         = BotAction ("cancel")
 
@@ -164,7 +165,7 @@ class Init (FSM.State):
 			elif args['type'] == 'diary':
 				BAI_bot.respond ("Recording diary. You can save it by /end with tags separated by comma.")
 				return ASys.workdiary
-		elif input == BotAction.tempswitchwork:
+		elif input == BotAction.tempfastswitch:
 			if args['type'] == 'note':
 				return ASys.worknewnote
 			elif args['type'] == 'diary':
@@ -188,7 +189,7 @@ class Idle (FSM.State):
 			elif args['type'] == 'diary':
 				BAI_bot.respond ("Recording diary. You can save it by /end with tags separated by comma.")
 				return ASys.workdiary
-		elif input == BotAction.tempswitchwork:
+		elif input == BotAction.tempfastswitch:
 			if args['type'] == 'note':
 				return ASys.worknewnote
 			elif args['type'] == 'diary':
@@ -347,6 +348,9 @@ def show_tags    (book, All = True, timestr = 'Anytime'):
 	if All:
 		preview_tags (book.query_tags())
 
+def show_dates   (book):
+	preview_dates (book.query_dates())
+
 def show_records (book, tags = [], All = False, timestr = 'Anytime'):
 	if not All:
 		stamplist = book.query_records (map(lambda x: x.strip().lower(), tags))
@@ -357,7 +361,17 @@ def show_records (book, tags = [], All = False, timestr = 'Anytime'):
 	else:
 		preview_records (book, stamplist)
 
-options = Utils.InlineOptions ("Tags")
+options = InlineOptions.InlineOptions ("Tags307")
+calendar = InlineCalendar.InlineCalendar ("Dates307")
+
+def preview_dates (datetree):
+	calendar.reset()
+	today = datetime.now()
+	calendar.currentYear = today.year
+	calendar.currentMonth = today.month
+	calendar.set_calendar_tree (datetree)
+	calendar.set_view (hasAll = True, hasDone = True, hasCancel = True)
+	BAI_bot.respond ('Select dates:', reply_markup = calendar.get_InlineKeyboardMarkup())
 
 def preview_tags (tagscloud):
 	#print (tagscloud)
@@ -369,7 +383,29 @@ def preview_tags (tagscloud):
 	options.set_options (option_list, callback_list, hasAll = True, hasDone = True, hasCancel = True)
 	BAI_bot.respond ('Select tags:', reply_markup = options.get_InlineKeyboardMarkup()) 
 
-def select (bot, update):
+def randomWord (length):
+	letters = string.ascii_lowercase
+	return ''.join(random.choice(letters) for i in range(length))
+
+def date_select (bot, update):
+	if PA_sys.currentState is not ASys.void:
+		query = update.callback_query
+		calendar.select (query.data)
+		select_dates_str = randomWord(5)
+		if calendar.SelectDone:
+			bot.edit_message_text(text='Select dates: ' + select_dates_str,
+					chat_id=query.message.chat_id, message_id=query.message.message_id)
+			PA_sys.withdrawwork()
+		elif calendar.SelectCancel:
+			PA_sys.withdrawwork()
+			bot.edit_message_text(text='Canceled.',
+					chat_id=query.message.chat_id, message_id=query.message.message_id)
+		else:
+			bot.edit_message_text(text='Select dates: ' + select_dates_str,
+					chat_id=query.message.chat_id, message_id=query.message.message_id,
+					reply_markup = calendar.get_InlineKeyboardMarkup())
+
+def tag_select (bot, update):
 	if PA_sys.currentState is not ASys.void:
 		query = update.callback_query
 		options.select (query.data)
@@ -391,6 +427,17 @@ def select (bot, update):
 			bot.edit_message_text(text='Select tags: ' + select_str,
 					chat_id=query.message.chat_id, message_id=query.message.message_id,
 					reply_markup = options.get_InlineKeyboardMarkup())
+
+def inline_select (bot, update):
+	query = update.callback_query
+	if options.name in query.data:
+		tag_select (bot, update)
+		return
+	if calendar.name in query.data:
+		date_select (bot, update)
+		return
+	return
+
 
 def preview_records (book, records_stamplist):
 	for stamp in records_stamplist:
@@ -421,7 +468,7 @@ class ASys (FSM.StateMachine):
 		cmd_cancel_hndl       = CmdHndl ('cancel', self.cancel, filters = filterme)
 		cmd_checkPlate_hndl   = CmdHndl ('check_plate', check_plate, pass_args = True, filters = filterme)
 		cmd_lookup_hndl       = CmdHndl ('lookup', lookup, pass_args = True, filters = filterme)
-		query_select_hndl     = CbQHndl (select)
+		query_select_hndl   	= CbQHndl (inline_select)
 		msg_hndl              = MsgHndl (Filters.text & filterme, process_msg)
 		
 		BAI_bot.add_handler (cmd_start_hndl)
@@ -462,8 +509,11 @@ class ASys (FSM.StateMachine):
 				if args[0].strip().lower() == 'all':
 					show_records (Notebook, args, All=True)
 				elif args[0].strip().lower() == 'tags':
-					self.switchwork (ASys.worknewnote)
+					self.fastswitch (ASys.worknewnote)
 					show_tags    (Notebook)
+				elif args[0].strip().lower() == 'dates':
+					self.fastswitch (ASys.worknewnote)
+					show_dates   (Notebook)
 				elif int(args[0]) in Notebook.records.keys():
 					self.on_event (BotAction.record, {"type": "note", "timestamp" : int(args[0]), "args": args})
 				else:
@@ -479,8 +529,11 @@ class ASys (FSM.StateMachine):
 				if args[0].strip().lower() == 'all':
 					show_records (Diary, args, All=True)
 				elif args[0].strip().lower() == 'tags':
-					self.switchwork (ASys.workdiary)
+					self.fastswitch (ASys.workdiary)
 					show_tags    (Diary)
+				elif args[0].strip().lower() == 'dates':
+					self.fastswitch (ASys.workdiary)
+					show_dates    (Diary)
 				else:
 					show_records (Diary, args, All=False)
 			else:

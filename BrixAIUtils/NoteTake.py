@@ -29,7 +29,7 @@ class Entry:
     if self.record ['timestamp'] == 0 :
       self.record ['timestamp'] = inttime
     self.record ['content'] [inttime] = content
-		# Flush cached representation strings
+    # Flush cached representation strings
     self.plain_textlist = [] 
     self.md_textlist = []
 
@@ -329,6 +329,30 @@ class NoteBook:
       for k, v in self.tags.items():
           tagscloud [k] = len(v)
       return tagscloud
+
+  def query_dates (self):
+    ret_timetree = {}
+    for year, months in self.changed_timetree.items():
+      ret_timetree [year] = {}
+      for month, mdays in months.items():
+        ret_timetree [year] [month] = {}
+        for mday, recordstamplist in mdays.items():
+          ret_timetree [year] [month] [mday] = len(recordstamplist)
+    for year, months in self.timetree.items():
+      if year not in ret_timetree:
+        ret_timetree [year] = {}
+      for month, mdays in months.items():
+        if month not in ret_timetree [year]:
+          ret_timetree [year] [month] = {}
+        for mday, recordstamplist in mdays.items():
+          if mday not in ret_timetree [year][month]:
+            ret_timetree [year] [month] [mday] = len(recordstamplist)
+          else:
+            ret_timetree [year] [month] [mday] += len(recordstamplist)
+    return ret_timetree
+
+  def query_date_records (self, datetree):
+      return []
 
   def query_records (self, tags):
       queried_records = {}
