@@ -322,9 +322,12 @@ def lookup (bot, update, args):
 				BAI_bot.remove_handler (v)
 			wordlist.clear()
 			for word in args:
-				send_str.append ('/' + word + '\n' + ev_dict.read (word) [0] [0:99])
-				wordlist [word] = CmdHndl (word, lambda bot, update, arg = word: BAI_bot.respond (ev_dict.read (arg)), filters = filterme)
-				BAI_bot.add_handler (wordlist [word])
+				if len(ev_dict.read(word)) > 0:
+					send_str.append ('/' + word + '\n' + ev_dict.read (word) [0] [:99])
+					wordlist [word] = CmdHndl (word, lambda bot, update, arg = word: BAI_bot.respond (ev_dict.read (arg)), filters = filterme)
+					BAI_bot.add_handler (wordlist [word])
+				else:
+					send_str.append ('No result found.')
 
 	BAI_bot.respond (send_str)
 

@@ -21,7 +21,6 @@ class Cache:
 			#cache hit
 			self.lru.remove(tag)
 			self.lru.insert(0,tag)
-			return self.split_text(self.cache[tag], 3000)
 		else:
 			#cache miss
 			value = self.fetch (tag)
@@ -31,7 +30,7 @@ class Cache:
 				removed_value = self.cache.pop (lru_tag)
 			self.lru.insert(0,tag)
 			self.cache[tag] = value
-			return self.split_text(self.cache[tag], 3000)
+		return self.split_text(self.cache[tag], 3000)
 
 		def fetch (self, tag):
 			assert 0, "fetch not implemented" 
