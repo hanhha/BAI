@@ -40,20 +40,20 @@ class ABot:
 	dispatcher  = None
 
 	def error_cb (self, bot, update, error):
-#		try:
-		 raise error
-#		except Unauthorized:
-#			print ("Unauthorized") 
-#		except BadRequest:
-#			print ("Malformed requests")
-#		except TimedOut:
-#			print ("Slow connection")
-#		except NetworkError:
-#			print ("Network error")
-#		except ChatMigrate as e:
-#			print ("Chat ID of group has changed") 
-#		except TelegramError:
-#			print ("Internal Telegram error")
+		try:
+			raise error
+		except Unauthorized:
+			print ("Unauthorized") 
+		except BadRequest:
+			print ("Malformed requests")
+		except TimedOut:
+			print ("Slow connection")
+		except NetworkError:
+			print ("Network error")
+		except ChatMigrate as e:
+			print ("Chat ID of group has changed") 
+		except TelegramError:
+			print ("Internal Telegram error")
 
 	def is_allowed (bot, update):
 		if update.message.chat_id != self.act_chat_id:
