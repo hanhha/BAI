@@ -11,7 +11,7 @@ class InlineOptions:
 	def set_options (self, options, callback_data_list,  hasAll = True, hasDone = True, hasCancel = True):
 		self.option_data_list            = options.copy()
 		self.selected_data_list          = [] 
-		self.callback_data_list          = callback_data_list.copy()
+		self.callback_data_list          = [(self.name + "_" + cb_item) for cb_item in callback_data_list]
 		self.hasAllOption      = hasAll
 		self.hasDoneOption     = hasDone
 		self.hasCancelOption   = hasCancel
@@ -48,15 +48,19 @@ class InlineOptions:
 		if len(text_line) != 0:
 			self.text_select.append(text_line.copy())
 
+	@property
+	def selectedOptions (self):
+		trunc_len = len(self.name) + 1
+		return [selected_item[trunc_len:] for selected_item in self.selected_data_list]
+
 	def select (self, selected_cb):
 		if selected_cb == self.name + '__All':
 			self.AllOptionSelected = True
 			self.SelectDone = True
-			#self.selected_data_list = []
 		elif selected_cb == self.name + '__Done':
 			self.SelectDone = True
 		elif selected_cb == self.name + '__Cancel':
-			self.selected_data_list = []
+			self.selected_data_list.clear()
 			self.SelectCancel = True
 		else: # toggle select status
 				i = self.callback_data_list.index(selected_cb)

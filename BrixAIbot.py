@@ -412,7 +412,7 @@ def tag_select (bot, update):
 	if PA_sys.currentState is not ASys.void:
 		query = update.callback_query
 		options.select (query.data)
-		select_str = ', '.join(options.selected_data_list)
+		select_str = ', '.join(options.selectedOptions)
 		if options.SelectDone:
 			bot.edit_message_text(text='Selected tags: ' + select_str,
 					chat_id=query.message.chat_id, message_id=query.message.message_id)
@@ -420,7 +420,7 @@ def tag_select (bot, update):
 				book = Notebook
 			elif PA_sys.currentState == ASys.workdiary:
 				book = Diary
-			show_records (book, options.selected_data_list, All=options.AllOptionSelected)
+			show_records (book, options.selectedOptions, All=options.AllOptionSelected)
 			PA_sys.withdrawwork()
 		elif options.SelectCancel:
 			PA_sys.withdrawwork()
