@@ -17,7 +17,7 @@ class Cache:
 		return ret_list
 
 	def read (self, tag):
-		if tag in self.cache.keys():
+		if tag in self.cache:
 			#cache hit
 			self.lru.remove(tag)
 			self.lru.insert(0,tag)

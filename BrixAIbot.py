@@ -158,7 +158,7 @@ class Init (FSM.State):
 		if input == BotAction.record:
 			if args['type'] == 'note':
 				BAI_bot.respond ("Recording note. You can save it by /end with tags separated by comma.")
-				if 'timestamp' in args.keys():
+				if 'timestamp' in args:
 					return ASys.workeditnote
 				else:
 					return ASys.worknewnote
@@ -182,7 +182,7 @@ class Idle (FSM.State):
 		if input == BotAction.record:
 			if args['type'] == 'note':
 				BAI_bot.respond ("Recording note. You can save it by /end with tags separated by comma.")
-				if 'timestamp' in args.keys():
+				if 'timestamp' in args:
 					return ASys.workeditnote
 				else:
 					return ASys.worknewnote
@@ -228,7 +228,7 @@ class WorkEditNote (FSM.State):
 	def __init__ (self):
 		FSM.State.__init__ (self, "WorkEditNote")
 	def run(self, input, args):
-		if 'timestamp' in args.keys():
+		if 'timestamp' in args:
 			self.timestamp_note = args ['timestamp']
 	def next(self, input, args):
 		if input == BotAction.record:
@@ -517,7 +517,7 @@ class ASys (FSM.StateMachine):
 				elif args[0].strip().lower() == 'dates':
 					self.fastswitch (ASys.worknewnote)
 					show_dates   (Notebook)
-				elif int(args[0]) in Notebook.records.keys():
+				elif int(args[0]) in Notebook.records:
 					self.on_event (BotAction.record, {"type": "note", "timestamp" : int(args[0]), "args": args})
 				else:
 					show_records (Notebook, args, All=False)
