@@ -343,6 +343,9 @@ def process_msg (bot, update):
 				PA_sys.current_content = tag_re.sub(r'\1', msg)
 			else:
 				PA_sys.current_content += '\n' + tag_re.sub(r'\1', msg)
+			pattern = re.compile ('[\W]+')
+			wcount = len ([x for x in PA_sys.current_content.split() if pattern.sub('',x).isalnum()])
+			BAI_bot.respond ("Word count: %d" %(wcount))
 		else:
 			BAI_bot.respond (["You said " + msg])
 			BAI_bot.respond ("I'm here to serve you")
