@@ -339,13 +339,16 @@ def process_msg (bot, update):
 		if (PA_sys.currentState == ASys.worknewnote) or (PA_sys.currentState == ASys.workeditnote) or (PA_sys.currentState == ASys.workdiary):
 			PA_sys.current_tags.extend(map (lambda x: x.strip().lower(), tag_re.findall(msg)))
 			PA_sys.current_tags = list(set(PA_sys.current_tags)) 
+
+			pattern = re.compile ('[\W]+')
+			wcount = len ([x for x in tag_re.sub(r'\1', msg).split() if pattern.sub('',x).isalnum()])
+			PA_sys.current_wcount += wcount
+			BAI_bot.respond ("Word count: %d" %(wcount))
+
 			if PA_sys.current_content == '':
 				PA_sys.current_content = tag_re.sub(r'\1', msg)
 			else:
 				PA_sys.current_content += '\n' + tag_re.sub(r'\1', msg)
-			pattern = re.compile ('[\W]+')
-			wcount = len ([x for x in PA_sys.current_content.split() if pattern.sub('',x).isalnum()])
-			BAI_bot.respond ("Word count: %d" %(wcount))
 		else:
 			BAI_bot.respond (["You said " + msg])
 			BAI_bot.respond ("I'm here to serve you")
@@ -462,6 +465,7 @@ def show_record (book, timestamp):
 
 class ASys (FSM.StateMachine):
 	def __init__(self):
+		self.current_wcount  = 0
 		self.current_content = ''
 		self.current_tags    = []
 		FSM.StateMachine.__init__(self, ASys.void)
@@ -551,12 +555,14 @@ class ASys (FSM.StateMachine):
 			self.current_tags = list(set(self.current_tags))
 			self.on_event (BotAction.end, {'current_content': self.current_content, 'current_tags': self.current_tags})	
 			self.current_content = ''
+			self.current_wcount  = 0
 			self.current_tags    = []
 
 	def cancel (self, bot, update):
 		if self.currentState is not ASys.void:
 			self.on_event (BotAction.cancel, {})	
 			self.current_content = ''
+			self.current_wcount  = 0
 			self.current_tags    = []
 	
 	def transition_disable_info(self):
