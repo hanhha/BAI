@@ -343,7 +343,7 @@ def process_msg (bot, update):
 			pattern = re.compile ('[\W]+')
 			wcount = len ([x for x in tag_re.sub(r'\1', msg).split() if pattern.sub('',x).isalnum()])
 			PA_sys.current_wcount += wcount
-			BAI_bot.respond ("Word count: %d" %(PAY_sys.current_wcount))
+			BAI_bot.respond ("Word count: %d" %(PA_sys.current_wcount))
 
 			if PA_sys.current_content == '':
 				PA_sys.current_content = tag_re.sub(r'\1', msg)
