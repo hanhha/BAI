@@ -13,6 +13,8 @@ from time import (localtime, strftime)
 
 from BrixAIUtils import (VehicleCheck, FSM, NoteTake, DictLookup, InlineOptions, InlineCalendar)
 
+from chatterbot import ChatBot
+
 import re, operator
 from argparse import ArgumentParser
 from functools import reduce
@@ -39,6 +41,8 @@ class ABot:
 	updater     = None 
 	dispatcher  = None
 
+	forebrain   = None
+
 	def error_cb (self, bot, update, error):
 		try:
 			raise error
@@ -61,6 +65,12 @@ class ABot:
 			return False
 		else:
 			return True
+
+	def respond_conversation (self, text, **kwargs):
+		"""
+		Get reponse from chatterbot to serve conversation
+		"""
+		self.act_bot.send_message (self.act_chat_id, text = self.forebrain.get_response(text).text, **kwargs)
 
 	def respond (self, texts, **kwargs):
 		"""
@@ -113,6 +123,14 @@ class ABot:
 
 		self.dispatcher.add_error_handler (self.error_cb)
 		logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+
+		self.forebrain         = ChatBot('BAI', 
+							storage_adaptor = 'chatterbot.storage.SQLStorageAdapter', 
+							database = config['chatterbot']['dbpath'],
+							logic_adapters = ['chatterbot.logic.BestMatch',
+																'chatterbot.logic.MathematicalEvaluation',
+																],
+							)
 
 BAI_bot               = ABot (args.botname)
 
@@ -350,8 +368,7 @@ def process_msg (bot, update):
 			else:
 				PA_sys.current_content += '\n' + tag_re.sub(r'\1', msg)
 		else:
-			BAI_bot.respond (["You said " + msg])
-			BAI_bot.respond ("I'm here to serve you")
+			BAI_bot.respond_conversation (msg)
 
 def show_tags    (book, All = True, timestr = 'Anytime'):
 	if All:
