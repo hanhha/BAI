@@ -17,3 +17,5 @@ A Telegram bot that can help me to manipulate notes and check some stuffs basing
 * /check_plate <plate number> - check movement violation of car with given plate number.
 * /lookup <word1 word2 ...>   - lookup words in English-Vietnamese dictionary then show their descriptions.
  
+## Conversation
+[Chatterbot](https://chatterbot.readthedocs.io/en/stable/) to serve conversation.
