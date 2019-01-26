@@ -14,6 +14,14 @@ class InlineCalendar:
 		self.selected_dates.clear()
 
 	@property
+	def selectedDatesSum (self):
+		return self.selected_dates
+
+	@property
+	def selectedDatesDetail (self):
+		return self.selected_dates
+
+	@property
 	def currentYear (self):
 		return self._currentYear
 
@@ -153,22 +161,28 @@ class InlineCalendar:
 					self.refresh_view()
 				elif command [0] == 'prvM':
 					self.currentMonth -= 1
+					if (self.currentMonth < 0):
+						self.currentMonth = 12
+						self.currentYear -= 1
 					self.refresh_view()
 				elif command [0] == 'nxtM':
 					self.currentMonth += 1
+					if (self.currentMonth > 12):
+						self.currentMonth = 1
+						self.currentYear += 1
 					self.refresh_view()
 				elif command [0] == 'year':
-					print ("year")
-					print (command)
+					#print ("year")
+					#print (command)
 				elif command [0] == 'month':
-					print ("month")
-					print (command)
+					#print ("month")
+					#print (command)
 				elif command [0] == 'wday':
-					print ("wday")
-					print (command)
+					#print ("wday")
+					#print (command)
 				elif command [0] == 'date':
-					print ("date")
-					print (command)
+					#print ("date")
+					#print (command)
 				else:
 					print ('Unsupported command.')
 					return

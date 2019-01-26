@@ -392,18 +392,15 @@ def preview_tags (tagscloud):
 	options.set_options (option_list, callback_list, hasAll = True, hasDone = True, hasCancel = True)
 	BAI_bot.respond ('Select tags:', reply_markup = options.get_InlineKeyboardMarkup()) 
 
-def randomWord (length):
-	letters = string.ascii_lowercase
-	return ''.join(random.choice(letters) for i in range(length))
-
 def date_select (bot, update):
 	if PA_sys.currentState is not ASys.void:
 		query = update.callback_query
 		calendar.select (query.data)
-		select_dates_str = randomWord(5)
+		select_dates_str = ', '.join(calendar.selectedDatesSum)
 		if calendar.SelectDone:
 			bot.edit_message_text(text='Select dates: ' + select_dates_str,
 					chat_id=query.message.chat_id, message_id=query.message.message_id)
+			#TODO
 			PA_sys.withdrawwork()
 		elif calendar.SelectCancel:
 			PA_sys.withdrawwork()
