@@ -1,0 +1,7 @@
+start - intiialize bot so that it can respond.
+note - explore notes or start to recording note.
+diary - explore entries or start to recording entry.
+end - finish recording (note/diary) and save it to disk with tags.
+check_plate - check movement violation of car with given plate number (in region of Vietnam only).
+lookup - lookup words in English-Vietnamese dictionary then show their descriptions.
+home - commands to control home's facilities.

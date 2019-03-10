@@ -6,15 +6,14 @@ from telegram.error import (TelegramError, Unauthorized, BadRequest, TimedOut, C
 from telegram import constants
 
 import logging
+import signal
 
 import configparser as CfgPsr
 
 from datetime import datetime
 from time import (localtime, strftime)
 
-from BrixAIUtils import (VehicleCheck, FSM, NoteTake, DictLookup, InlineOptions, InlineCalendar)
-
-from chatterbot import ChatBot
+from BrixAIUtils import (VehicleCheck, FSM, NoteTake, DictLookup, InlineOptions, InlineCalendar, Home)
 
 import re, operator
 from argparse import ArgumentParser
@@ -26,11 +25,15 @@ parser.add_argument ('-p', '--path', type=str, help = 'path of root dir of noteb
 parser.add_argument ('-n', '--notebook', type=str, help = 'name of using notebook')
 parser.add_argument ('-d', '--diary', type=str, help = 'name of using diary')
 parser.add_argument ('-b', '--botname', type=str, help = 'name of bot')
-parser.add_argument ('-c', '--config', type=str, help = 'path to config file that stores api token of the bog')
+parser.add_argument ('-c', '--config', type=str, help = 'path to config file that stores api token of the bot')
 args = parser.parse_args()
+
+HOST = '127.0.0.1'
+PORT = 1901
 
 Notebook = NoteTake.NoteBook (args.notebook, args.path, editable = True)
 Diary    = NoteTake.NoteBook (args.diary, args.path)
+Home     = Home.Home (HOST=HOST, PORT=PORT)
 
 class ABot:
   config_filename = args.config
@@ -41,8 +44,6 @@ class ABot:
 
   updater     = None 
   dispatcher  = None
-
-  forebrain   = None
 
   def error_cb (self, bot, update, error):
     try:
@@ -71,7 +72,7 @@ class ABot:
     """
     Get reponse from chatterbot to serve conversation
     """
-    self.act_bot.send_message (self.act_chat_id, text = self.forebrain.get_response(text).text, **kwargs)
+    self.act_bot.send_message (self.act_chat_id, text = "Sorry, I've been removed conversation ability.", **kwargs)
 
   def respond (self, texts, **kwargs):
     """
@@ -125,14 +126,6 @@ class ABot:
 
     self.dispatcher.add_error_handler (self.error_cb)
     logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.CRITICAL)
-
-    self.forebrain         = ChatBot('BAI', 
-              storage_adapter = 'chatterbot.storage.SQLStorageAdapter', 
-              database_uri = config['chatterbot']['dbpath'],
-              logic_adapters = ['chatterbot.logic.BestMatch',
-                                'chatterbot.logic.MathematicalEvaluation',
-                                ],
-              )
 
 BAI_bot               = ABot (args.botname)
 
@@ -351,6 +344,27 @@ def lookup (bot, update, args):
 
   BAI_bot.respond (send_str)
 
+def home (bot, update, args):
+  if PA_sys.currentState is not ASys.void:
+    if len(args) == 0:
+      send_str = ['Well, at least tell me what to do.']
+      BAI_bot.respond (send_str)
+    else:
+      for action in args:
+        print (args)
+        result = Home.request (action)
+        msg = action
+        if result [0] == 0x01:
+          msg = msg + " Failed."
+        else:
+          if len (result) == 1:
+            msg = msg + " Done."
+          else:
+            for idx in range (1, len (result)):
+              msg = msg + " " + str (result[idx])
+        BAI_bot.respond ([msg])
+
+
 def process_msg (bot, update):
   if PA_sys.currentState is not ASys.void:
     tag_re = re.compile(r"(\w+),,,")
@@ -498,6 +512,7 @@ class ASys (FSM.StateMachine):
     cmd_cancel_hndl       = CmdHndl ('cancel', self.cancel, filters = filterme)
     cmd_checkPlate_hndl   = CmdHndl ('check_plate', check_plate, pass_args = True, filters = filterme)
     cmd_lookup_hndl       = CmdHndl ('lookup', lookup, pass_args = True, filters = filterme)
+    cmd_home_hndl         = CmdHndl ('home', home, pass_args = True, filters = filterme)
     query_select_hndl     = CbQHndl (inline_select)
     msg_hndl              = MsgHndl (Filters.text & filterme, process_msg)
     
@@ -508,6 +523,7 @@ class ASys (FSM.StateMachine):
     BAI_bot.add_handler (cmd_cancel_hndl)
     BAI_bot.add_handler (cmd_checkPlate_hndl)
     BAI_bot.add_handler (cmd_lookup_hndl)
+    BAI_bot.add_handler (cmd_home_hndl)
     BAI_bot.add_handler (query_select_hndl)
     BAI_bot.add_handler (msg_hndl)
 
@@ -597,6 +613,11 @@ ASys.workdiary      = WorkDiary ()
 
 PA_sys                = ASys ()
 
+def signal_handler (signum, frame):
+  print ("User or system terminated.")
+
 if __name__ == '__main__':
+  signal.signal (signal.SIGINT, signal_handler)
+  signal.signal (signal.SIGTERM, signal_handler)
   print ("Start ..")
   PA_sys.live ()
