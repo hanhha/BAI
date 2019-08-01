@@ -8,16 +8,14 @@ from telegram import constants
 import logging
 import signal
 
-import configparser as CfgPsr
-
 from datetime import datetime
-from time import (localtime, strftime)
+from time     import (localtime, strftime)
+from argparse import ArgumentParser
 
 from BrixAIUtils import (VehicleCheck, FSM, NoteTake, DictLookup, InlineOptions, InlineCalendar, Home)
 
-import re, operator
-from argparse import ArgumentParser
-from functools import reduce
+import configparser as CfgPsr
+import re
 import random, string
 
 parser = ArgumentParser()
@@ -26,16 +24,21 @@ parser.add_argument ('-n', '--notebook', type=str, help = 'name of using noteboo
 parser.add_argument ('-d', '--diary', type=str, help = 'name of using diary')
 parser.add_argument ('-b', '--botname', type=str, help = 'name of bot')
 parser.add_argument ('-c', '--config', type=str, help = 'path to config file that stores api token of the bot')
+
 args = parser.parse_args()
 
-HOST = '127.0.0.1'
-PORT = 1901
+config = CfgPsr.ConfigParser ()
+config.read (args.config)
 
 Notebook = NoteTake.NoteBook (args.notebook, args.path, editable = True)
 Diary    = NoteTake.NoteBook (args.diary, args.path)
-Home     = Home.Home (HOST=HOST, PORT=PORT)
+Home     = Home.Home (HOST=config['home']['host'],
+                      PORT=int(config['home']['port']),
+                      TRNS_TOPIC=config['home']['trns_topic'],
+                      RECV_TOPIC=config['home']['recv_topic'],
+                      COMM_TOPIC=config['home']['comm_topic'])
 
-class ABot:
+class ABot (object):
   config_filename = args.config
   
   act_name    = ""
@@ -105,8 +108,8 @@ class ABot:
     self.respond (greeting + " " + "My name is " + self.act_name)
 
   def live (self):
-    self.updater.start_polling()
-    self.updater.idle()
+    self.updater.start_polling ()
+    self.updater.idle ()
     if self.act_bot is not None:
        self.respond ("I'm offline right now. Good bye.")
 
@@ -116,18 +119,17 @@ class ABot:
   def remove_handler (self, hndl):
     self.dispatcher.remove_handler (hndl)
 
-  def __init__ (self, name = "BAI"):
-    self.act_name = name 
-    config = CfgPsr.ConfigParser ()
-    config.read (self.config_filename)
-    self.updater    = Updater(token=config['telegram']['token'])
-    self.act_chat_id    = int(config['telegram']['chat_id'])
-    self.dispatcher = self.updater.dispatcher
+  def __init__ (self, name = "BAI", token = "", chat_id = 0, home_ctrl = None):
+    self.act_name    = name 
+    self.updater     = Updater(token=token)
+    self.act_chat_id = chat_id
+
+    self.dispatcher  = self.updater.dispatcher
 
     self.dispatcher.add_error_handler (self.error_cb)
-    logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.CRITICAL)
+    logging.basicConfig (format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.CRITICAL)
 
-BAI_bot               = ABot (args.botname)
+BAI_bot = ABot (args.botname, token = config['telegram']['token'], chat_id = int(config['telegram']['chat_id']))
 
 class FilterMe (BaseFilter):
   def filter (self, message):
@@ -480,7 +482,6 @@ def inline_select (bot, update):
     return
   return
 
-
 def preview_records (book, records_stamplist):
   for stamp in records_stamplist:
     record = book.records [stamp]
@@ -611,7 +612,7 @@ ASys.worknewnote    = WorkNewNote ()
 ASys.workeditnote   = WorkEditNote ()
 ASys.workdiary      = WorkDiary ()
 
-PA_sys                = ASys ()
+PA_sys              = ASys ()
 
 def signal_handler (signum, frame):
   print ("User or system terminated.")
@@ -619,5 +620,7 @@ def signal_handler (signum, frame):
 if __name__ == '__main__':
   signal.signal (signal.SIGINT, signal_handler)
   signal.signal (signal.SIGTERM, signal_handler)
+  Home.start ()
+  print ("Home system started ...")
   print ("Start ..")
   PA_sys.live ()
