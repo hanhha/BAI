@@ -24,7 +24,7 @@ class Home (MyMqttRoom):
         logging.info ("Published command: %s" %(data))
         result = wdt_wait (lambda : self.IDLE, 10)
         if result:
-            return ([0x00] + list(self.Climate)) if data == "climate" else [0x00] 
+            return ([0x00] + list(self.Climate) + ["- light temp humid"]) if data == "climate" else [0x00] 
         else:
             logging.info ("Timeout.")
             return [0x01]
