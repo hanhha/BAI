@@ -394,7 +394,7 @@ class NoteBook:
           f = open (filename, 'a')
           for stamp in recordstamplist:
             f.write ('\n'.join(['@[' + str(self.records[stamp].timestamp) + ']',
-                                                   ','.join(self.records[stamp].tags)]))
+                                                   ', '.join(self.records[stamp].tags)]))
             for edited_timestamp, content in sorted (self.records[stamp].content.items(), key = lambda t: t[0], reverse = False):
               f.write('\n' + '@[' + str(edited_timestamp) + ']')
               for contentline in content.split('\n'):
@@ -421,7 +421,7 @@ class NoteBook:
             if k in self.tags:
               self.tags[k].extend(v)
             else:
-                            self.tags[k] = v
+              self.tags[k] = v
 
   @staticmethod
   def parse_file (path):
@@ -472,7 +472,7 @@ class NoteBook:
           else:
             pass
       else:
-          print ("Error: malfunction")
+        print ("Error: malfunction")
     
     f.close()
     return records, tag_idx

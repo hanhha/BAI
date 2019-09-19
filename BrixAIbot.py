@@ -530,7 +530,7 @@ class ASys (FSM.StateMachine):
 
   def end (self, bot, update, args):
     if self.currentState is not ASys.void:
-      self.current_tags.extend(map(lambda x: x.strip().lower(), args))
+      self.current_tags.extend(map(lambda x: x.strip().lower(), ','.join(args).split(',')))
       self.current_tags = list(set(self.current_tags))
       self.on_event (BotAction.end, {'current_content': self.current_content, 'current_tags': self.current_tags})
       self.current_content = ''
