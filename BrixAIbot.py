@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 
-from telegram.ext import (Updater, Filters, BaseFilter)
+from telegram.ext import (Filters)
 from telegram.ext import (CommandHandler as CmdHndl, MessageHandler as MsgHndl, CallbackQueryHandler as CbQHndl)
-from telegram.error import (TelegramError, Unauthorized, BadRequest, TimedOut, ChatMigrated, NetworkError)
-from telegram import constants
 
 import logging
 import signal
@@ -12,11 +10,14 @@ from datetime import datetime
 from time     import (localtime, strftime)
 from argparse import ArgumentParser
 
-from BrixAIUtils import (VehicleCheck, FSM, NoteTake, DictLookup, InlineOptions, InlineCalendar, Home)
+from BrixAIUtils import (VehicleCheck, FSM, NoteTake, DictLookup, InlineOptions, InlineCalendar, Home, CommandExec, Timer)
+from ABot import (ABot, FilterMe)
 
 import configparser as CfgPsr
 import re
 import random, string
+
+logging.basicConfig (format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 parser = ArgumentParser()
 parser.add_argument ('-p', '--path', type=str, help = 'path of root dir of notebook')
@@ -38,108 +39,15 @@ Home     = Home.Home (HOST=config['home']['host'],
                       RECV_TOPIC=config['home']['recv_topic'],
                       COMM_TOPIC=config['home']['comm_topic'])
 
-class ABot (object):
-  config_filename = args.config
-  
-  act_name    = ""
-  act_chat_id = ""
-  act_bot     = None
+shortcuts = {"radio" : "mplayer -volume 30 -playlist http://minnesota.publicradio.org/tools/play/streams/classical.pls"}
 
-  updater     = None 
-  dispatcher  = None
-
-  def error_cb (self, bot, update, error):
-    try:
-      raise error
-    except Unauthorized:
-      print ("Unauthorized") 
-    except BadRequest:
-      print ("Malformed requests")
-    except TimedOut:
-      print ("Slow connection")
-    except NetworkError:
-      print ("Network error")
-    except ChatMigrate as e:
-      print ("Chat ID of group has changed") 
-    except TelegramError:
-      print ("Internal Telegram error")
-
-  def is_allowed (bot, update):
-    if update.message.chat_id != self.act_chat_id:
-      bot.send_message (update.message.chat_id, text = "I don't know you. You're harrasing.")
-      return False
-    else:
-      return True
-
-  def respond_conversation (self, text, **kwargs):
-    """
-    Get reponse from chatterbot to serve conversation
-    """
-    self.act_bot.send_message (self.act_chat_id, text = "Sorry, I've been removed conversation ability.", **kwargs)
-
-  def respond (self, texts, **kwargs):
-    """
-    In case of Markdown or HTML, the split feature would cause error due to no matching parentheses.
-    So that feature is abandoned if Markdown or HTML exists
-    """
-    if type(texts) is list:
-      for idx, text in enumerate(texts):
-          self.act_bot.send_message (self.act_chat_id, text = text, **kwargs)
-    else:
-      self.act_bot.send_message (self.act_chat_id, text = texts, **kwargs)
-
-  def initialize (self, bot, update):
-    #self.act_chat_id = update.message.chat_id
-    self.act_bot     = bot
-    #print (self.act_chat_id)
-    #print (update.message)
-  
-  def greeting (self):
-    h = datetime.now().time().hour
-    if h >= 5 and h <= 12:
-      greeting = "Good morning."
-    elif h > 12 and h <= 17:
-      greeting = "Good afternoon."
-    elif h > 17 and h <= 21:
-      greeting = "Good evening."
-    else:
-      greeting = "Greetings night owl."
-  
-    self.respond (greeting + " " + "My name is " + self.act_name)
-
-  def live (self):
-    self.updater.start_polling ()
-    self.updater.idle ()
-    if self.act_bot is not None:
-       self.respond ("I'm offline right now. Good bye.")
-
-  def add_handler (self, hndl):
-    self.dispatcher.add_handler (hndl)
-
-  def remove_handler (self, hndl):
-    self.dispatcher.remove_handler (hndl)
-
-  def __init__ (self, name = "BAI", token = "", chat_id = 0, home_ctrl = None):
-    self.act_name    = name 
-    self.updater     = Updater(token=token)
-    self.act_chat_id = chat_id
-
-    self.dispatcher  = self.updater.dispatcher
-
-    self.dispatcher.add_error_handler (self.error_cb)
-    logging.basicConfig (format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.CRITICAL)
+CmdExe   = CommandExec.CommandExec (shortcuts)
 
 BAI_bot = ABot (args.botname, token = config['telegram']['token'], chat_id = int(config['telegram']['chat_id']))
 
-class FilterMe (BaseFilter):
-  def filter (self, message):
-    #print (message)
-    if message.chat_id != BAI_bot.act_chat_id:
-      return False
-    else:
-      return True
+filterme = FilterMe(BAI_bot)
 
-filterme = FilterMe()
+timer = Timer.Timer (BAI_bot.job_queue, CmdExe.run)
 
 class BotAction (FSM.Action):
   def __init__ (self, action):
@@ -225,8 +133,8 @@ class WorkNewNote (FSM.State):
         record = NoteTake.Entry(NoteTake.Entry.shape_record (args['current_content'], args['current_tags']))
         Notebook.new_record (record)
         Notebook.store_notebook ()
-        PA_sys.note_read_hndl[record.timestamp] = CmdHndl (str(record.timestamp), 
-                                                              lambda bot, 
+        PA_sys.note_read_hndl[record.timestamp] = CmdHndl (str(record.timestamp),
+                                                              lambda bot,
                                                               update, arg = record.timestamp,
                                                               book = Notebook: show_record (book, arg), filters = filterme)
         BAI_bot.add_handler (PA_sys.note_read_hndl [record.timestamp])
@@ -253,8 +161,8 @@ class WorkEditNote (FSM.State):
         Notebook.append_record ({'content':args['current_content'], 'tags':args['current_tags']}, self.timestamp_note)
         Notebook.store_notebook ()
         record = Notebook.records [self.timestamp_note]
-        PA_sys.note_read_hndl[record.timestamp] = CmdHndl (str(record.timestamp), 
-                                                              lambda bot, 
+        PA_sys.note_read_hndl[record.timestamp] = CmdHndl (str(record.timestamp),
+                                                              lambda bot,
                                                               update, arg = record.timestamp,
                                                               book = Notebook: show_record (book, arg), filters = filterme)
         BAI_bot.add_handler (PA_sys.note_read_hndl [record.timestamp])
@@ -280,7 +188,7 @@ class WorkDiary (FSM.State):
         record = NoteTake.Entry(NoteTake.Entry.shape_record (args['current_content'], args['current_tags']))
         Diary.new_record (record)
         Diary.store_notebook ()
-        PA_sys.diary_read_hndl[record.timestamp] = CmdHndl (str(record.timestamp), 
+        PA_sys.diary_read_hndl[record.timestamp] = CmdHndl (str(record.timestamp),
                                                                lambda bot,
                                                                update, arg =
                                                                record.timestamp,
@@ -305,7 +213,7 @@ def movement_violate_report_str (no, report):
 
 def check_plate (bot, update, args):
   if PA_sys.currentState is not ASys.void:
-    send_str = [] 
+    send_str = []
     if len(args) == 0:
       list_of_vi = VehicleCheck.check_violation ("51f-81420")
       if len(list_of_vi) != 0:
@@ -328,6 +236,7 @@ ev_dict = DictLookup.EV_dict_cache ()
 wordlist = {}
 
 def lookup (bot, update, args):
+  global wordlist
   if PA_sys.currentState is not ASys.void:
     send_str = []
     if len(args) == 0:
@@ -345,6 +254,36 @@ def lookup (bot, update, args):
           send_str.append ('No result found.')
 
   BAI_bot.respond (send_str)
+
+def run_cmd (bot, update, args):
+  if PA_sys.currentState is not ASys.void:
+    if len(args) < 2:
+      send_str = ['You must tell me in this format <exec/stop> "shortcut name".']
+    else:
+      if args[0] == "exec":
+          ret = CmdExe.intepret(CmdExe.run (" ".join(args[1:])))
+      elif args[0] == "stop":
+          ret = CmdExe.intepret(CmdExe.kill (" ".join(args[1:])))
+      else:
+          ret = "Sorry, I don't understand."
+      send_str = [ret]
+    BAI_bot.respond (send_str)
+
+def book_cmd (bot, update, args):
+  if PA_sys.currentState is not ASys.void:
+    if len(args) < 2:
+        send_str = ['You must tell me in this format <add/remove> HH:MM:SS "shortcut name".']
+    else:
+      if args[0] == "add":
+          t = timer.add (" ".join(args[2:]), args[1])
+          ret = timer.intepret (t) 
+      elif args[0] == "remove":
+          t= timer.remove (" ".join(args[2:]), args[1])
+          ret = timer.intepret (t) 
+      else:
+          ret = "Sorry, I don't understand."
+      send_str = [ret]
+    BAI_bot.respond (send_str)
 
 def home (bot, update, args):
   if PA_sys.currentState is not ASys.void:
@@ -374,7 +313,7 @@ def process_msg (bot, update):
     msg = update.message.text
     if (PA_sys.currentState == ASys.worknewnote) or (PA_sys.currentState == ASys.workeditnote) or (PA_sys.currentState == ASys.workdiary):
       PA_sys.current_tags.extend(map (lambda x: x.strip().lower(), tag_re.findall(msg)))
-      PA_sys.current_tags = list(set(PA_sys.current_tags)) 
+      PA_sys.current_tags = list(set(PA_sys.current_tags))
 
       pattern = re.compile ('[\W]+')
       wcount = len ([x for x in tag_re.sub(r'\1', msg).split() if pattern.sub('',x).isalnum()])
@@ -418,14 +357,13 @@ def preview_dates (datetree):
   BAI_bot.respond ('Select dates:', reply_markup = calendar.get_InlineKeyboardMarkup())
 
 def preview_tags (tagscloud):
-  #print (tagscloud)
   option_list = []
   callback_list = []
   for k, v in sorted(tagscloud.items(), key = lambda t: t[1], reverse = True):
     option_list.append('{0}({1})'.format(k,v))
     callback_list.append(k)
   options.set_options (option_list, callback_list, hasAll = True, hasDone = True, hasCancel = True)
-  BAI_bot.respond ('Select tags:', reply_markup = options.get_InlineKeyboardMarkup()) 
+  BAI_bot.respond ('Select tags:', reply_markup = options.get_InlineKeyboardMarkup())
 
 def randomWord (length):
   letters = string.ascii_lowercase
@@ -485,13 +423,13 @@ def inline_select (bot, update):
 def preview_records (book, records_stamplist):
   for stamp in records_stamplist:
     record = book.records [stamp]
-    preview_str = record.to_str(Markdown = False, ftime = localtime, joined = True) [0:99]  
+    preview_str = record.to_str(Markdown = False, ftime = localtime, joined = True) [0:99]
     preview_str += '\n...click to /' + str(stamp) + ' for full note...'
     BAI_bot.respond ('/' + str(stamp) + '\n' + preview_str)
   BAI_bot.respond ("That's all.")
-  
+
 def record2str (book, timestamp):
-  return book.records[timestamp].to_str(Markdown = True, ftime = localtime) 
+  return book.records[timestamp].to_str(Markdown = True, ftime = localtime)
 
 def show_record (book, timestamp):
   record_content = book.records[timestamp].to_str(Markdown = True, ftime = localtime)
@@ -504,7 +442,7 @@ class ASys (FSM.StateMachine):
     self.current_tags    = []
     self.initialized     = False
     FSM.StateMachine.__init__(self, ASys.void)
-    
+
     # Adding handlers
     cmd_start_hndl        = CmdHndl ('start', self.initialize_bot, filters = filterme)
     cmd_note_hndl         = CmdHndl ('note', self.note, pass_args = True, filters = filterme)
@@ -514,9 +452,11 @@ class ASys (FSM.StateMachine):
     cmd_checkPlate_hndl   = CmdHndl ('check_plate', check_plate, pass_args = True, filters = filterme)
     cmd_lookup_hndl       = CmdHndl ('lookup', lookup, pass_args = True, filters = filterme)
     cmd_home_hndl         = CmdHndl ('home', home, pass_args = True, filters = filterme)
+    cmd_exec_hndl         = CmdHndl ('do', run_cmd, pass_args = True, filters = filterme)
+    cmd_timer_hndl        = CmdHndl ('book_time', book_cmd, pass_args = True, filters = filterme)
     query_select_hndl     = CbQHndl (inline_select)
     msg_hndl              = MsgHndl (Filters.text & filterme, process_msg)
-    
+
     BAI_bot.add_handler (cmd_start_hndl)
     BAI_bot.add_handler (cmd_note_hndl)
     BAI_bot.add_handler (cmd_diary_hndl)
@@ -525,6 +465,8 @@ class ASys (FSM.StateMachine):
     BAI_bot.add_handler (cmd_checkPlate_hndl)
     BAI_bot.add_handler (cmd_lookup_hndl)
     BAI_bot.add_handler (cmd_home_hndl)
+    BAI_bot.add_handler (cmd_exec_hndl)
+    BAI_bot.add_handler (cmd_timer_hndl)
     BAI_bot.add_handler (query_select_hndl)
     BAI_bot.add_handler (msg_hndl)
 
@@ -539,7 +481,7 @@ class ASys (FSM.StateMachine):
       self.diary_read_hndl [timestamp] = CmdHndl (str(timestamp), lambda bot, update,
           arg = timestamp, book = Diary: show_record (book, arg), filters = filterme)
       BAI_bot.add_handler (self.diary_read_hndl [timestamp])
-  
+
   def live (self):
     BAI_bot.live ()
 
@@ -547,7 +489,7 @@ class ASys (FSM.StateMachine):
     self.on_event (BotAction.initialize, {"bot": bot,
                                           "update": update
                                         })
-  
+
   def note (self, bot, update, args):
     if self.currentState is not ASys.void:
       if len(args) == 0:
@@ -571,7 +513,7 @@ class ASys (FSM.StateMachine):
   def diary (self, bot, update, args):
     if self.currentState is not ASys.void:
       if len(args) == 0:
-        self.on_event (BotAction.record, {"type": "diary", "args": args})  
+        self.on_event (BotAction.record, {"type": "diary", "args": args})
       elif (len(args) == 1):
         if args[0].strip().lower() == 'all':
           show_records (Diary, args, All=True)
@@ -590,18 +532,18 @@ class ASys (FSM.StateMachine):
     if self.currentState is not ASys.void:
       self.current_tags.extend(map(lambda x: x.strip().lower(), args))
       self.current_tags = list(set(self.current_tags))
-      self.on_event (BotAction.end, {'current_content': self.current_content, 'current_tags': self.current_tags})  
+      self.on_event (BotAction.end, {'current_content': self.current_content, 'current_tags': self.current_tags})
       self.current_content = ''
       self.current_wcount  = 0
       self.current_tags    = []
 
   def cancel (self, bot, update):
     if self.currentState is not ASys.void:
-      self.on_event (BotAction.cancel, {})  
+      self.on_event (BotAction.cancel, {})
       self.current_content = ''
       self.current_wcount  = 0
       self.current_tags    = []
-  
+
   def transition_disable_info(self):
     BAI_bot.respond ('Please finish previous activity. All preemptive activities were abandoned.')
 

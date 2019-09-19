@@ -5,7 +5,6 @@ import logging
 from .MyMqttRoom import *
 from .MyMqttWrap import wdt_wait
 
-logging.basicConfig (level = logging.DEBUG)
 logger = logging.getLogger (__name__)
 
 class Home (MyMqttRoom):

@@ -5,3 +5,5 @@ end - finish recording (note/diary) and save it to disk with tags.
 check_plate - check movement violation of car with given plate number (in region of Vietnam only).
 lookup - lookup words in English-Vietnamese dictionary then show their descriptions.
 home - commands to control home's facilities.
+do - following by either "exec" or "stop" then shortname of predefined command.
+book_time - following by either "add" or "remove" then time in "HH:MM:SS" format and shortname of predefined command.
