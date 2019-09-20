@@ -39,9 +39,11 @@ Home     = Home.Home (HOST=config['home']['host'],
                       RECV_TOPIC=config['home']['recv_topic'],
                       COMM_TOPIC=config['home']['comm_topic'])
 
-shortcuts = {"radio" : "mplayer -volume 30 -playlist http://minnesota.publicradio.org/tools/play/streams/classical.pls"}
+shortcuts = {"radio" : {"cmd": "mplayer -volume 30 -playlist http://minnesota.publicradio.org/tools/play/streams/classical.pls",
+                        "desc" : "Play radio, classic music channel."}
+            }
 
-CmdExe   = CommandExec.CommandExec (shortcuts)
+CmdExe = CommandExec.CommandExec (shortcuts)
 
 BAI_bot = ABot (args.botname, token = config['telegram']['token'], chat_id = int(config['telegram']['chat_id']))
 
@@ -257,32 +259,39 @@ def lookup (bot, update, args):
 
 def run_cmd (bot, update, args):
   if PA_sys.currentState is not ASys.void:
-    if len(args) < 2:
-      send_str = ['You must tell me in this format <exec/stop> "shortcut name".']
+    if len(args) == 0:
+      ret = 'Well. Available subcommands are list, support or  <exec/stop> "shortcut name".'
     else:
       if args[0] == "exec":
-          ret = CmdExe.intepret(CmdExe.run (" ".join(args[1:])))
+        ret = CmdExe.intepret(CmdExe.run (" ".join(args[1:]))) if len(args) > 1 else "Please try again with given task name."
       elif args[0] == "stop":
-          ret = CmdExe.intepret(CmdExe.kill (" ".join(args[1:])))
+        ret = CmdExe.intepret(CmdExe.kill (" ".join(args[1:]))) if len(args) > 1 else "Please try again with given task name."
+      elif args[0] == "list":
+        tmp = CmdExe.list ()
+        ret = "Running task(s): " + "; ".join(tmp) if len(tmp) > 0 else "There is no running task."
+      elif args[0] == "support":
+        ret = "Supported tasks:\n"
+        ret = ret + "\n".join ([k + " - " + v for k,v in CmdExe.support().items()])
       else:
-          ret = "Sorry, I don't understand."
-      send_str = [ret]
+        ret = "Sorry, I don't understand. " +  'Available subcommands are list, support or  <exec/stop> "shortcut name".'
+    send_str = [ret]
     BAI_bot.respond (send_str)
 
 def book_cmd (bot, update, args):
   if PA_sys.currentState is not ASys.void:
-    if len(args) < 2:
-        send_str = ['You must tell me in this format <add/remove> HH:MM:SS "shortcut name".']
+    if len(args) == 0:
+      ret = 'Well. Available subcommands are list or  <add/remove> HH:MM:SS "shortcut name".'
     else:
       if args[0] == "add":
-          t = timer.add (" ".join(args[2:]), args[1])
-          ret = timer.intepret (t) 
+        ret = timer.intepret(timer.add (" ".join(args[2:]), args[1])) if len(args) > 1 else "Please try again with complete info."
       elif args[0] == "remove":
-          t= timer.remove (" ".join(args[2:]), args[1])
-          ret = timer.intepret (t) 
+        ret = timer.intepret(timer.remove (" ".join(args[2:]), args[1])) if len(args) > 1 else "Please try again with complete info."
+      elif args[0] == "list":
+        tmp = timer.list ()
+        ret = "Scheduled tasks:\n" + "\n".join (k + " - " + "; ".join(v) for k,v in tmp.items()) if len(tmp) > 0 else "There is no scheduled tasks."
       else:
-          ret = "Sorry, I don't understand."
-      send_str = [ret]
+          ret = "Sorry, I don't understand. " + 'Available subcommands are list or  <add/remove> HH:MM:SS "shortcut name".'
+    send_str = [ret]
     BAI_bot.respond (send_str)
 
 def home (bot, update, args):
